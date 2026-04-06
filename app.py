@@ -1228,57 +1228,47 @@ with tab_sku:
             </div>
             """, unsafe_allow_html=True)
     
-    # FINANCIAL SUMMARY
+    # TOTAL QTY SUMMARY (Pengganti Financial Summary)
     st.markdown("---")
-    st.subheader("💰 Financial Summary")
+    st.subheader("📊 Total Quantity Summary")
     
-    po_value_main = main_metrics['total_po'] * main_metrics['purchase_price']
-    sales_value_main = main_metrics['total_sales'] * main_metrics['floor_price']
-    inbound_value_main = main_metrics['total_po_delivered'] * main_metrics['purchase_price']
-    gap_main = po_value_main - sales_value_main
+    col_qty1, col_qty2, col_qty3, col_qty4 = st.columns(4)
     
-    col_fin1, col_fin2, col_fin3, col_fin4 = st.columns(4)
+    with col_qty1:
+        st.metric("📈 TOTAL SALES", f"{main_metrics['total_sales']:,.0f}",
+                  help="Total unit terjual (Sales)")
     
-    with col_fin1:
-        st.metric(f"📦 {main_sku} - Total PO Value", format_rupiah(po_value_main),
-                  help=f"PO Qty × Purchase Price ({format_rupiah(main_metrics['purchase_price'])}/unit)")
+    with col_qty2:
+        st.metric("📦 TOTAL PO", f"{main_metrics['total_po']:,.0f}",
+                  help="Total unit dipesan (Purchase Order)")
     
-    with col_fin2:
-        st.metric(f"📥 {main_sku} - Inbound Value", format_rupiah(inbound_value_main),
-                  help=f"Inbound Qty × Purchase Price")
+    with col_qty3:
+        st.metric("📥 TOTAL INBOUND", f"{main_metrics['total_po_delivered']:,.0f}",
+                  help="Total unit sudah masuk gudang")
     
-    with col_fin3:
-        st.metric(f"💰 {main_sku} - Total Sales Value", format_rupiah(sales_value_main),
-                  help=f"Sales Qty × Floor Price ({format_rupiah(main_metrics['floor_price'])}/unit)")
+    with col_qty4:
+        # Hitung selisih
+        inbound_gap = main_metrics['total_po_delivered'] - main_metrics['total_sales']
+        gap_color = "normal" if inbound_gap >= 0 else "inverse"
+        st.metric("⚖️ GAP (Inbound - Sales)", f"{inbound_gap:+,.0f}",
+                  delta=f"{inbound_gap/main_metrics['total_sales']*100:.1f}% dari Sales" if main_metrics['total_sales'] > 0 else None,
+                  delta_color=gap_color,
+                  help="Selisih antara barang masuk vs barang terjual")
     
-    with col_fin4:
-        delta_color = "normal" if gap_main >= 0 else "inverse"
-        st.metric(f"⚖️ {main_sku} - Gap", format_rupiah(gap_main),
-                  delta=f"{gap_main/po_value_main*100:.1f}% dari PO" if po_value_main > 0 else None,
-                  delta_color=delta_color)
-    
+    # Jika ada SKU pembanding, tampilkan perbandingan Total Qty
     if compare_sku and compare_metrics:
-        po_value_comp = compare_metrics['total_po'] * compare_metrics['purchase_price']
-        sales_value_comp = compare_metrics['total_sales'] * compare_metrics['floor_price']
+        st.markdown(f'<div class="small-text" style="margin-top:8px;">📊 <strong>Perbandingan Qty dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
         
-        st.markdown(f'<div class="small-text" style="margin-top:8px;">📊 <strong>Perbandingan dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
-        
-        col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+        col_c1, col_c2, col_c3 = st.columns(3)
         with col_c1:
-            st.metric("Total PO", f"{compare_metrics['total_po']:,.0f}", 
-                      delta=f"{compare_metrics['total_po'] - main_metrics['total_po']:+,.0f}")
-        with col_c2:
-            st.metric("Total Sales", f"{compare_metrics['total_sales']:,.0f}",
+            st.metric("Sales", f"{compare_metrics['total_sales']:,.0f}", 
                       delta=f"{compare_metrics['total_sales'] - main_metrics['total_sales']:+,.0f}")
+        with col_c2:
+            st.metric("PO", f"{compare_metrics['total_po']:,.0f}",
+                      delta=f"{compare_metrics['total_po'] - main_metrics['total_po']:+,.0f}")
         with col_c3:
-            st.metric("PO Value", format_rupiah(po_value_comp),
-                      delta=f"{format_rupiah(po_value_comp - po_value_main)}")
-        with col_c4:
-            st.metric("Sales Value", format_rupiah(sales_value_comp),
-                      delta=f"{format_rupiah(sales_value_comp - sales_value_main)}")
-    
-    if main_metrics['floor_price'] == 0 or main_metrics['purchase_price'] == 0:
-        st.warning("⚠️ Harga (Floor_Price atau Purchase_Order_Price) = 0. Periksa data Product Master.")
+            st.metric("Inbound", f"{compare_metrics['total_po_delivered']:,.0f}",
+                      delta=f"{compare_metrics['total_po_delivered'] - main_metrics['total_po_delivered']:+,.0f}")
     
     # DETAIL DATA PER BULAN
     with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
