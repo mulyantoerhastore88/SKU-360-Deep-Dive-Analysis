@@ -131,6 +131,13 @@ st.markdown("""
         font-size: 0.7rem;
         font-weight: 600;
     }
+    .expandable-section {
+        margin-bottom: 1rem;
+    }
+    .stExpander {
+        border: none !important;
+        box-shadow: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -312,7 +319,11 @@ def calculate_sku_metrics(df_sales, df_po, sku_id, df_product):
         'product_name': sku_id,
         'brand': '-',
         'tier': '-',
-        'moq': 0
+        'moq': 0,
+        'first_sales_month': None,
+        'last_sales_month': None,
+        'first_po_month': None,
+        'last_po_month': None
     }
     
     # Ambil data dari Product Master jika ada
@@ -336,6 +347,8 @@ def calculate_sku_metrics(df_sales, df_po, sku_id, df_product):
         metrics['months_with_sales'] = len(sales_monthly)
         if not sales_monthly.empty:
             metrics['avg_monthly_sales'] = sales_monthly['Sales_Qty'].mean()
+            metrics['first_sales_month'] = sales_monthly['Month'].min()
+            metrics['last_sales_month'] = sales_monthly['Month'].max()
     
     # PO data
     po_sku = df_po[df_po['SKU_ID'] == sku_id].copy() if not df_po.empty else pd.DataFrame()
@@ -347,6 +360,8 @@ def calculate_sku_metrics(df_sales, df_po, sku_id, df_product):
         metrics['months_with_po'] = len(po_monthly)
         if not po_monthly.empty:
             metrics['avg_monthly_po'] = po_monthly['PO_Qty'].mean()
+            metrics['first_po_month'] = po_monthly['Month'].min()
+            metrics['last_po_month'] = po_monthly['Month'].max()
     
     return metrics
 
@@ -367,6 +382,52 @@ def get_all_skus_from_data(df_sales, df_po, df_product):
     sku_set = {s for s in sku_set if pd.notna(s) and str(s).strip() != ''}
     
     return sorted(list(sku_set))
+
+def prepare_chart_data(sku_id, metrics):
+    """
+    Menyiapkan data chart hanya untuk periode yang memiliki data
+    (tidak menampilkan bulan kosong di awal/akhir)
+    """
+    combined = []
+    
+    # Kumpulkan semua bulan yang memiliki data (baik sales maupun PO)
+    all_months = set()
+    
+    if not metrics['sales_data'].empty:
+        for month in metrics['sales_data']['Month']:
+            all_months.add(month)
+    
+    if not metrics['po_data'].empty:
+        for month in metrics['po_data']['Month']:
+            all_months.add(month)
+    
+    if not all_months:
+        return pd.DataFrame()
+    
+    # Buat dictionary untuk quick lookup
+    sales_dict = {}
+    if not metrics['sales_data'].empty:
+        for _, row in metrics['sales_data'].iterrows():
+            sales_dict[row['Month']] = row['Sales_Qty']
+    
+    po_dict = {}
+    if not metrics['po_data'].empty:
+        for _, row in metrics['po_data'].iterrows():
+            po_dict[row['Month']] = row['PO_Qty']
+    
+    # Buat list data untuk semua bulan yang ada (urutkan dari awal ke akhir)
+    sorted_months = sorted(all_months)
+    
+    for month in sorted_months:
+        combined.append({
+            'Month': month,
+            'Month_Label': month.strftime('%b %Y'),
+            'Sales': sales_dict.get(month, 0),
+            'PO': po_dict.get(month, 0)
+        })
+    
+    df = pd.DataFrame(combined)
+    return df
 
 # --- Load Data ---
 client = init_gsheet_connection()
@@ -394,11 +455,9 @@ col_sku1, col_sku2, col_chart, col_refresh = st.columns([2, 2, 1.5, 0.8])
 
 with col_sku1:
     st.markdown('<div class="control-label">📦 SKU UTAMA (Referensi)</div>', unsafe_allow_html=True)
-    # Buat mapping display name
     sku_display_map = {}
     sku_display_list = []
     for sku in all_skus:
-        # Cari nama produk dari Product Master
         product_row = df_product[df_product['SKU_ID'] == sku]
         if not product_row.empty:
             product_name = product_row.iloc[0].get('Product_Name', '')
@@ -435,7 +494,7 @@ compare_sku = sku_display_map[selected_compare_display] if selected_compare_disp
 main_metrics = calculate_sku_metrics(df_sales, df_po, main_sku, df_product)
 
 # =============================================================================
-# HEADER SKU UTAMA (Compact)
+# HEADER SKU UTAMA
 # =============================================================================
 status_class = "status-active" if main_metrics['status'] == 'ACTIVE' else "status-inactive" if main_metrics['status'] == 'INACTIVE' else "status-notfound"
 status_text = main_metrics['status'] if main_metrics['status'] != 'NOT_FOUND' else "TIDAK ADA DI PRODUCT MASTER"
@@ -461,86 +520,62 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# METRIC CARDS (Compact - 4 kolom)
+# METRIC CARDS (Collapsible dengan Expander)
 # =============================================================================
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #10B981;">
-        <div class="metric-value">{main_metrics['total_sales']:,.0f}</div>
-        <div class="metric-label">📈 TOTAL SALES</div>
-        <div class="metric-sub">{main_metrics['months_with_sales']} bulan aktif</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #F59E0B;">
-        <div class="metric-value">{main_metrics['total_po']:,.0f}</div>
-        <div class="metric-label">📦 TOTAL PO</div>
-        <div class="metric-sub">{main_metrics['months_with_po']} bulan order</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #6366F1;">
-        <div class="metric-value">{main_metrics['avg_monthly_sales']:.0f}</div>
-        <div class="metric-label">📊 AVG MONTHLY SALES</div>
-        <div class="metric-sub">Rata-rata per bulan</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #8B5CF6;">
-        <div class="metric-value">{main_metrics['avg_monthly_po']:.0f}</div>
-        <div class="metric-label">🎯 AVG MONTHLY PO</div>
-        <div class="metric-sub">Rata-rata order per bulan</div>
-    </div>
-    """, unsafe_allow_html=True)
+with st.expander("📊 Lihat Detail Metrik SKU", expanded=False):
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #10B981;">
+            <div class="metric-value">{main_metrics['total_sales']:,.0f}</div>
+            <div class="metric-label">📈 TOTAL SALES</div>
+            <div class="metric-sub">{main_metrics['months_with_sales']} bulan aktif</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #F59E0B;">
+            <div class="metric-value">{main_metrics['total_po']:,.0f}</div>
+            <div class="metric-label">📦 TOTAL PO</div>
+            <div class="metric-sub">{main_metrics['months_with_po']} bulan order</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #6366F1;">
+            <div class="metric-value">{main_metrics['avg_monthly_sales']:.0f}</div>
+            <div class="metric-label">📊 AVG MONTHLY SALES</div>
+            <div class="metric-sub">Rata-rata per bulan</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #8B5CF6;">
+            <div class="metric-value">{main_metrics['avg_monthly_po']:.0f}</div>
+            <div class="metric-label">🎯 AVG MONTHLY PO</div>
+            <div class="metric-sub">Rata-rata order per bulan</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # =============================================================================
-# TREND CHART (Support 2 SKU)
+# TREND CHART (Hanya periode dengan data)
 # =============================================================================
 st.markdown("---")
 st.subheader("📈 Tren Sales vs Purchase Order")
 
-# Fungsi untuk menyiapkan data SKU
-def prepare_chart_data(sku_id, metrics, label, color_sales, color_po):
-    combined = []
-    if not metrics['sales_data'].empty:
-        for _, row in metrics['sales_data'].iterrows():
-            combined.append({
-                'Month': row['Month'],
-                'Month_Label': row['Month'].strftime('%b %Y'),
-                f'{label}_Sales': row['Sales_Qty'],
-                f'{label}_PO': 0
-            })
-    
-    if not metrics['po_data'].empty:
-        for _, row in metrics['po_data'].iterrows():
-            existing = next((x for x in combined if x['Month'] == row['Month']), None)
-            if existing:
-                existing[f'{label}_PO'] = row['PO_Qty']
-            else:
-                combined.append({
-                    'Month': row['Month'],
-                    'Month_Label': row['Month'].strftime('%b %Y'),
-                    f'{label}_Sales': 0,
-                    f'{label}_PO': row['PO_Qty']
-                })
-    
-    df = pd.DataFrame(combined) if combined else pd.DataFrame()
-    return df.sort_values('Month') if not df.empty else df
+# Prepare data dengan filter periode yang ada datanya saja
+main_df = prepare_chart_data(main_sku, main_metrics)
 
-# Prepare data
-main_df = prepare_chart_data(main_sku, main_metrics, 'Main', '#10B981', '#F59E0B')
-compare_df = None
 if compare_sku:
     compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
-    compare_df = prepare_chart_data(compare_sku, compare_metrics, 'Compare', '#8B5CF6', '#EC4899')
+    compare_df = prepare_chart_data(compare_sku, compare_metrics)
+else:
+    compare_metrics = None
+    compare_df = None
 
 # Buat chart
 if not main_df.empty:
@@ -549,36 +584,36 @@ if not main_df.empty:
     # SKU Utama - Sales
     if chart_type == "Bar Chart":
         fig.add_trace(go.Bar(
-            x=main_df['Month_Label'], y=main_df['Main_Sales'],
+            x=main_df['Month_Label'], y=main_df['Sales'],
             name=f'{main_sku} - Sales',
             marker_color='#10B981',
-            text=main_df['Main_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='outside'
         ))
         fig.add_trace(go.Bar(
-            x=main_df['Month_Label'], y=main_df['Main_PO'],
+            x=main_df['Month_Label'], y=main_df['PO'],
             name=f'{main_sku} - PO',
             marker_color='#F59E0B',
-            text=main_df['Main_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='outside'
         ))
     else:
         fig.add_trace(go.Scatter(
-            x=main_df['Month_Label'], y=main_df['Main_Sales'],
+            x=main_df['Month_Label'], y=main_df['Sales'],
             name=f'{main_sku} - Sales',
             mode='lines+markers',
             line=dict(color='#10B981', width=2.5),
             marker=dict(size=6, color='#10B981'),
-            text=main_df['Main_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='top center'
         ))
         fig.add_trace(go.Scatter(
-            x=main_df['Month_Label'], y=main_df['Main_PO'],
+            x=main_df['Month_Label'], y=main_df['PO'],
             name=f'{main_sku} - PO',
             mode='lines+markers',
             line=dict(color='#F59E0B', width=2.5, dash='dash'),
             marker=dict(size=6, color='#F59E0B', symbol='diamond'),
-            text=main_df['Main_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='top center'
         ))
     
@@ -586,42 +621,42 @@ if not main_df.empty:
     if compare_df is not None and not compare_df.empty:
         if chart_type == "Bar Chart":
             fig.add_trace(go.Bar(
-                x=compare_df['Month_Label'], y=compare_df['Compare_Sales'],
+                x=compare_df['Month_Label'], y=compare_df['Sales'],
                 name=f'{compare_sku} - Sales',
                 marker_color='#8B5CF6',
-                text=compare_df['Compare_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                text=compare_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
                 textposition='outside'
             ))
             fig.add_trace(go.Bar(
-                x=compare_df['Month_Label'], y=compare_df['Compare_PO'],
+                x=compare_df['Month_Label'], y=compare_df['PO'],
                 name=f'{compare_sku} - PO',
                 marker_color='#EC4899',
-                text=compare_df['Compare_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                text=compare_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
                 textposition='outside'
             ))
             fig.update_layout(barmode='group')
         else:
             fig.add_trace(go.Scatter(
-                x=compare_df['Month_Label'], y=compare_df['Compare_Sales'],
+                x=compare_df['Month_Label'], y=compare_df['Sales'],
                 name=f'{compare_sku} - Sales',
                 mode='lines+markers',
                 line=dict(color='#8B5CF6', width=2.5),
                 marker=dict(size=6, color='#8B5CF6'),
-                text=compare_df['Compare_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                text=compare_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
                 textposition='top center'
             ))
             fig.add_trace(go.Scatter(
-                x=compare_df['Month_Label'], y=compare_df['Compare_PO'],
+                x=compare_df['Month_Label'], y=compare_df['PO'],
                 name=f'{compare_sku} - PO',
                 mode='lines+markers',
                 line=dict(color='#EC4899', width=2.5, dash='dash'),
                 marker=dict(size=6, color='#EC4899', symbol='diamond'),
-                text=compare_df['Compare_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                text=compare_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
                 textposition='top center'
             ))
     
     fig.update_layout(
-        height=400,
+        height=450,
         xaxis_title='Periode',
         yaxis_title='Quantity (Units)',
         hovermode='x unified',
@@ -631,11 +666,15 @@ if not main_df.empty:
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Informasi periode data
+    st.caption(f"📅 Periode data yang ditampilkan: {main_df['Month_Label'].iloc[0]} - {main_df['Month_Label'].iloc[-1]} | Total {len(main_df)} bulan")
+    
 else:
     st.info("📊 Tidak ada data Sales atau PO untuk SKU ini")
 
 # =============================================================================
-# SMART DIAGNOSTICS (Fokus ke Trend Sales)
+# SMART DIAGNOSTICS
 # =============================================================================
 st.markdown("---")
 st.subheader("🩺 Smart Diagnostics & Rekomendasi")
@@ -689,10 +728,9 @@ for icon, title, desc, color in diagnoses:
     </div>
     """, unsafe_allow_html=True)
 
-# Jika ada SKU pembanding, tampilkan juga
-if compare_sku:
+# Jika ada SKU pembanding
+if compare_sku and compare_metrics:
     st.markdown(f'<div class="small-text" style="margin-top:8px;">🔍 <strong>Perbandingan dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
-    compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
     compare_diagnoses = get_diagnostics(compare_metrics, f"{compare_sku}")
     for icon, title, desc, color in compare_diagnoses:
         bg_color = "#F0FDF4" if "🟢" in icon else "#FEF2F2" if "🔴" in icon or "📉" in icon else "#FFFBEB"
@@ -706,7 +744,7 @@ if compare_sku:
         """, unsafe_allow_html=True)
 
 # =============================================================================
-# FINANCIAL SUMMARY (PO Value = PO × Purchase_Order_Price, Sales Value = Sales × Floor_Price)
+# FINANCIAL SUMMARY
 # =============================================================================
 st.markdown("---")
 st.subheader("💰 Financial Summary")
@@ -732,9 +770,8 @@ with col_fin3:
               delta=f"{gap_main/po_value_main*100:.1f}% dari PO" if po_value_main > 0 else None,
               delta_color=delta_color)
 
-# Jika ada SKU pembanding, tampilkan ringkasan perbandingan
-if compare_sku:
-    compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
+# Jika ada SKU pembanding
+if compare_sku and compare_metrics:
     po_value_comp = compare_metrics['total_po'] * compare_metrics['purchase_price']
     sales_value_comp = compare_metrics['total_sales'] * compare_metrics['floor_price']
     
@@ -761,26 +798,25 @@ if main_metrics['floor_price'] == 0 or main_metrics['purchase_price'] == 0:
 # =============================================================================
 # DETAIL DATA PER BULAN
 # =============================================================================
-st.markdown("---")
 with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
     if not main_df.empty:
         detail_df = main_df.copy()
         detail_df['Bulan'] = detail_df['Month'].dt.strftime('%b %Y')
-        detail_df['Sales Qty'] = detail_df['Main_Sales'].apply(lambda x: f"{x:,.0f}")
-        detail_df['PO Qty'] = detail_df['Main_PO'].apply(lambda x: f"{x:,.0f}")
-        detail_df['Sales Value'] = (detail_df['Main_Sales'] * main_metrics['floor_price']).apply(format_rupiah)
-        detail_df['PO Value'] = (detail_df['Main_PO'] * main_metrics['purchase_price']).apply(format_rupiah)
+        detail_df['Sales Qty'] = detail_df['Sales'].apply(lambda x: f"{x:,.0f}")
+        detail_df['PO Qty'] = detail_df['PO'].apply(lambda x: f"{x:,.0f}")
+        detail_df['Sales Value'] = (detail_df['Sales'] * main_metrics['floor_price']).apply(format_rupiah)
+        detail_df['PO Value'] = (detail_df['PO'] * main_metrics['purchase_price']).apply(format_rupiah)
         
         display_cols = ['Bulan', 'Sales Qty', 'Sales Value', 'PO Qty', 'PO Value']
         st.dataframe(detail_df[display_cols], use_container_width=True, hide_index=True)
         
-        # Jika ada SKU pembanding, tampilkan juga datanya
+        # Jika ada SKU pembanding
         if compare_sku and compare_df is not None and not compare_df.empty:
             st.markdown(f'<div class="small-text" style="margin-top:12px;">📊 <strong>Data {compare_sku}</strong></div>', unsafe_allow_html=True)
             compare_detail = compare_df.copy()
             compare_detail['Bulan'] = compare_detail['Month'].dt.strftime('%b %Y')
-            compare_detail['Sales Qty'] = compare_detail['Compare_Sales'].apply(lambda x: f"{x:,.0f}")
-            compare_detail['PO Qty'] = compare_detail['Compare_PO'].apply(lambda x: f"{x:,.0f}")
+            compare_detail['Sales Qty'] = compare_detail['Sales'].apply(lambda x: f"{x:,.0f}")
+            compare_detail['PO Qty'] = compare_detail['PO'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(compare_detail[['Bulan', 'Sales Qty', 'PO Qty']], use_container_width=True, hide_index=True)
     else:
         st.info("Tidak ada data")
