@@ -422,19 +422,62 @@ def prepare_sales_analysis_data(df_sales, df_product):
     df = df_sales.copy()
     df['SKU_ID'] = df['SKU_ID'].astype(str)
     
-    # Gabungkan dengan product info
+    # Inisialisasi kolom default
+    df['Brand'] = 'Unknown'
+    df['SKU_Tier'] = 'Unknown'
+    df['Status'] = 'UNKNOWN'
+    df['Floor_Price'] = 0
+    
+    # Gabungkan dengan product info jika ada
     if not df_product.empty:
         df_product['SKU_ID'] = df_product['SKU_ID'].astype(str)
-        df = pd.merge(df, df_product[['SKU_ID', 'Brand', 'SKU_Tier', 'Status', 'Floor_Price']], 
-                      on='SKU_ID', how='left')
         
-        # Fill missing values
-        df['Brand'] = df['Brand'].fillna('Unknown')
-        df['SKU_Tier'] = df['SKU_Tier'].fillna('Unknown')
-        df['Status'] = df['Status'].fillna('UNKNOWN')
+        # Pilih kolom yang tersedia di product master
+        product_cols = ['SKU_ID']
+        if 'Brand' in df_product.columns:
+            product_cols.append('Brand')
+        if 'SKU_Tier' in df_product.columns:
+            product_cols.append('SKU_Tier')
+        if 'Status' in df_product.columns:
+            product_cols.append('Status')
+        if 'Floor_Price' in df_product.columns:
+            product_cols.append('Floor_Price')
+        
+        df_product_subset = df_product[product_cols].copy()
+        
+        # Merge
+        df = pd.merge(df, df_product_subset, on='SKU_ID', how='left', suffixes=('', '_prod'))
+        
+        # Update kolom dari product master jika ada
+        if 'Brand_prod' in df.columns:
+            df['Brand'] = df['Brand_prod'].fillna('Unknown')
+            df = df.drop(columns=['Brand_prod'])
+        elif 'Brand' in df.columns and 'Brand_x' in df.columns:
+            df['Brand'] = df['Brand_y'].fillna('Unknown')
+        
+        if 'SKU_Tier_prod' in df.columns:
+            df['SKU_Tier'] = df['SKU_Tier_prod'].fillna('Unknown')
+        elif 'SKU_Tier' in df.columns and 'SKU_Tier_x' in df.columns:
+            df['SKU_Tier'] = df['SKU_Tier_y'].fillna('Unknown')
+        
+        if 'Status_prod' in df.columns:
+            df['Status'] = df['Status_prod'].fillna('UNKNOWN')
+        
+        if 'Floor_Price_prod' in df.columns:
+            df['Floor_Price'] = df['Floor_Price_prod'].fillna(0)
+    
+    # Pastikan kolom yang dibutuhkan ada
+    if 'Brand' not in df.columns:
+        df['Brand'] = 'Unknown'
+    if 'SKU_Tier' not in df.columns:
+        df['SKU_Tier'] = 'Unknown'
+    if 'Status' not in df.columns:
+        df['Status'] = 'UNKNOWN'
+    if 'Floor_Price' not in df.columns:
+        df['Floor_Price'] = 0
     
     # Hitung nilai sales (Qty × Floor_Price)
-    df['Sales_Value'] = df['Sales_Qty'] * df['Floor_Price'].fillna(0)
+    df['Sales_Value'] = df['Sales_Qty'] * df['Floor_Price']
     
     # Tambah kolom waktu
     df['Year'] = df['Month'].dt.year
