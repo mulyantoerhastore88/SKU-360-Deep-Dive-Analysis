@@ -976,7 +976,7 @@ with tab_sku:
     elif not stock_metrics['has_stock']:
         st.info("ℹ️ Tidak ada data stok untuk SKU ini.")
     
-    # =========================================================================
+        # =========================================================================
     # DETAIL BATCH (Collapsible)
     # =========================================================================
     if stock_metrics['has_stock'] and not stock_metrics['batch_details'].empty:
@@ -996,8 +996,10 @@ with tab_sku:
                 st.warning(f"⚠️ Terdapat {stock_metrics['expiring_soon']:,.0f} unit stok yang akan EXPIRED dalam 30 hari.")
             elif stock_metrics['expiring_3months'] > 0:
                 st.info(f"ℹ️ Terdapat {stock_metrics['expiring_3months']:,.0f} unit stok yang akan EXPIRED dalam 1-3 bulan.")
+    else:
+        st.info("📦 Tidak ada data stok untuk SKU ini")
     
-        
+    # =========================================================================   
     # TREND CHART - COMBO CHART (Sales & Inbound = Bar, PO = Line)
     st.markdown("---")
     st.subheader("📈 Tren Sales vs PO vs Inbound")
