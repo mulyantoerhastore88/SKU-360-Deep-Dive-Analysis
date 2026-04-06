@@ -876,6 +876,8 @@ with tab_sku:
     # --- Hitung Metrik ---
     main_metrics = calculate_sku_metrics(df_sales, df_po, df_po_delivered, main_sku, df_product)
     
+    # --- Hitung Stock Metrics untuk SKU Utama ---
+    stock_metrics = calculate_stock_metrics(df_stock, df_product, main_sku, main_metrics['avg_monthly_sales'])
     
     status_class = "status-active" if main_metrics['status'] == 'ACTIVE' else "status-inactive" if main_metrics['status'] == 'INACTIVE' else "status-notfound"
     status_text = main_metrics['status'] if main_metrics['status'] != 'NOT_FOUND' else "TIDAK ADA DI PRODUCT MASTER"
@@ -976,7 +978,7 @@ with tab_sku:
     elif not stock_metrics['has_stock']:
         st.info("ℹ️ Tidak ada data stok untuk SKU ini.")
     
-        # =========================================================================
+    # =========================================================================
     # DETAIL BATCH (Collapsible)
     # =========================================================================
     if stock_metrics['has_stock'] and not stock_metrics['batch_details'].empty:
@@ -999,10 +1001,12 @@ with tab_sku:
     else:
         st.info("📦 Tidak ada data stok untuk SKU ini")
     
-    # =========================================================================   
+    # =========================================================================
     # TREND CHART - COMBO CHART (Sales & Inbound = Bar, PO = Line)
+    # =========================================================================
     st.markdown("---")
     st.subheader("📈 Tren Sales vs PO vs Inbound")
+    
     
     main_df = prepare_chart_data(main_sku, main_metrics)
     
