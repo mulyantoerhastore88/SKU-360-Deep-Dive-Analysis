@@ -829,39 +829,6 @@ with tab_sku:
     
     st.markdown('<div class="control-panel">', unsafe_allow_html=True)
     
-    col_sku1, col_sku2, col_chart, col_refresh = st.columns([2, 2, 1.5, 0.8])
-    
-    with col_sku1:
-        st.markdown('<div class="control-label">📦 SKU UTAMA (Referensi)</div>', unsafe_allow_html=True)
-        sku_display_map = {}
-        sku_display_list = []
-        for sku in all_skus:
-            product_row = df_product[df_product['SKU_ID'] == sku]
-            if not product_row.empty:
-                product_name = product_row.iloc[0].get('Product_Name', '')
-                display = f"{sku} - {product_name}" if product_name else sku
-            else:
-                display = f"{sku} (No Product Data)"
-            sku_display_map[display] = sku
-            sku_display_list.append(display)
-        
-        selected_main_display = st.selectbox("SKU Utama", sku_display_list, key="main_sku")
-    
-    with col_sku2:
-        st.markdown('<div class="control-label">🔄 SKU PEMBANDING (Opsional)</div>', unsafe_allow_html=True)
-        compare_options = ["[Tidak ada perbandingan]"] + sku_display_list
-        selected_compare_display = st.selectbox("SKU Pembanding", compare_options, key="compare_sku")
-    
-    with col_chart:
-        st.markdown('<div class="control-label">📊 TIPE CHART</div>', unsafe_allow_html=True)
-        chart_type = st.selectbox("Chart Type", ["Bar Chart", "Line Chart"], label_visibility="collapsed", key="chart_type")
-    
-    with col_refresh:
-        st.markdown('<div class="control-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
-        if st.button("🔄 Refresh", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-    
     st.markdown('</div>', unsafe_allow_html=True)
     
     main_sku = sku_display_map[selected_main_display]
@@ -1008,7 +975,7 @@ with tab_sku:
     else:
         st.info("📦 Tidak ada data stok untuk SKU ini")
     
-    # TREND CHART
+    # TREND CHART - COMBO CHART (Sales & Inbound = Bar, PO = Line)
     st.markdown("---")
     st.subheader("📈 Tren Sales vs PO vs Inbound")
     
@@ -1024,114 +991,77 @@ with tab_sku:
     if not main_df.empty:
         fig = go.Figure()
         
-        if chart_type == "Bar Chart":
-            fig.add_trace(go.Bar(
-                x=main_df['Month_Label'], y=main_df['Sales'],
-                name=f'{main_sku} - Sales',
-                marker_color='#10B981',
-                text=main_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='outside'
-            ))
-            fig.add_trace(go.Bar(
-                x=main_df['Month_Label'], y=main_df['PO'],
-                name=f'{main_sku} - PO',
-                marker_color='#F59E0B',
-                text=main_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='outside'
-            ))
-            fig.add_trace(go.Bar(
-                x=main_df['Month_Label'], y=main_df['PO_Delivered'],
-                name=f'{main_sku} - Inbound',
-                marker_color='#3B82F6',
-                text=main_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='outside'
-            ))
-        else:
-            fig.add_trace(go.Scatter(
-                x=main_df['Month_Label'], y=main_df['Sales'],
-                name=f'{main_sku} - Sales',
-                mode='lines+markers',
-                line=dict(color='#10B981', width=2.5),
-                marker=dict(size=6, color='#10B981'),
-                text=main_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='top center'
-            ))
-            fig.add_trace(go.Scatter(
-                x=main_df['Month_Label'], y=main_df['PO'],
-                name=f'{main_sku} - PO',
-                mode='lines+markers',
-                line=dict(color='#F59E0B', width=2.5, dash='dash'),
-                marker=dict(size=6, color='#F59E0B', symbol='diamond'),
-                text=main_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='top center'
-            ))
-            fig.add_trace(go.Scatter(
-                x=main_df['Month_Label'], y=main_df['PO_Delivered'],
-                name=f'{main_sku} - Inbound',
-                mode='lines+markers',
-                line=dict(color='#3B82F6', width=2.5),
-                marker=dict(size=6, color='#3B82F6', symbol='square'),
-                text=main_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                textposition='top center'
-            ))
+        # === SKU UTAMA ===
+        # Sales - Bar Chart (Hijau)
+        fig.add_trace(go.Bar(
+            x=main_df['Month_Label'], y=main_df['Sales'],
+            name=f'{main_sku} - Sales',
+            marker_color='#10B981',
+            text=main_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            textposition='outside',
+            opacity=0.8
+        ))
         
+        # Inbound (PO Delivered) - Bar Chart (Biru)
+        fig.add_trace(go.Bar(
+            x=main_df['Month_Label'], y=main_df['PO_Delivered'],
+            name=f'{main_sku} - Inbound',
+            marker_color='#3B82F6',
+            text=main_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            textposition='outside',
+            opacity=0.8
+        ))
+        
+        # PO - Line Chart (Orange, dashed)
+        fig.add_trace(go.Scatter(
+            x=main_df['Month_Label'], y=main_df['PO'],
+            name=f'{main_sku} - PO',
+            mode='lines+markers',
+            line=dict(color='#F59E0B', width=3, dash='dash'),
+            marker=dict(size=8, color='#F59E0B', symbol='diamond'),
+            text=main_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            textposition='top center'
+        ))
+        
+        # === SKU PEMBANDING (jika ada) ===
         if compare_df is not None and not compare_df.empty:
-            if chart_type == "Bar Chart":
-                fig.add_trace(go.Bar(
-                    x=compare_df['Month_Label'], y=compare_df['Sales'],
-                    name=f'{compare_sku} - Sales',
-                    marker_color='#A7F3D0',
-                    text=compare_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='outside'
-                ))
-                fig.add_trace(go.Bar(
-                    x=compare_df['Month_Label'], y=compare_df['PO'],
-                    name=f'{compare_sku} - PO',
-                    marker_color='#FDE68A',
-                    text=compare_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='outside'
-                ))
-                fig.add_trace(go.Bar(
-                    x=compare_df['Month_Label'], y=compare_df['PO_Delivered'],
-                    name=f'{compare_sku} - Inbound',
-                    marker_color='#BFDBFE',
-                    text=compare_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='outside'
-                ))
-                fig.update_layout(barmode='group')
-            else:
-                fig.add_trace(go.Scatter(
-                    x=compare_df['Month_Label'], y=compare_df['Sales'],
-                    name=f'{compare_sku} - Sales',
-                    mode='lines+markers',
-                    line=dict(color='#A7F3D0', width=2.5),
-                    marker=dict(size=6, color='#A7F3D0'),
-                    text=compare_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='top center'
-                ))
-                fig.add_trace(go.Scatter(
-                    x=compare_df['Month_Label'], y=compare_df['PO'],
-                    name=f'{compare_sku} - PO',
-                    mode='lines+markers',
-                    line=dict(color='#FDE68A', width=2.5, dash='dash'),
-                    marker=dict(size=6, color='#FDE68A', symbol='diamond'),
-                    text=compare_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='top center'
-                ))
-                fig.add_trace(go.Scatter(
-                    x=compare_df['Month_Label'], y=compare_df['PO_Delivered'],
-                    name=f'{compare_sku} - Inbound',
-                    mode='lines+markers',
-                    line=dict(color='#BFDBFE', width=2.5),
-                    marker=dict(size=6, color='#BFDBFE', symbol='square'),
-                    text=compare_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
-                    textposition='top center'
-                ))
+            # Sales - Bar Chart (Hijau Muda)
+            fig.add_trace(go.Bar(
+                x=compare_df['Month_Label'], y=compare_df['Sales'],
+                name=f'{compare_sku} - Sales',
+                marker_color='#A7F3D0',
+                text=compare_df['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='outside',
+                opacity=0.7
+            ))
+            
+            # Inbound - Bar Chart (Biru Muda)
+            fig.add_trace(go.Bar(
+                x=compare_df['Month_Label'], y=compare_df['PO_Delivered'],
+                name=f'{compare_sku} - Inbound',
+                marker_color='#BFDBFE',
+                text=compare_df['PO_Delivered'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='outside',
+                opacity=0.7
+            ))
+            
+            # PO - Line Chart (Orange Muda, dashed)
+            fig.add_trace(go.Scatter(
+                x=compare_df['Month_Label'], y=compare_df['PO'],
+                name=f'{compare_sku} - PO',
+                mode='lines+markers',
+                line=dict(color='#FDE68A', width=3, dash='dash'),
+                marker=dict(size=8, color='#FDE68A', symbol='diamond'),
+                text=compare_df['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='top center'
+            ))
         
+        # Update layout untuk barmode='group' agar bar berdampingan
         fig.update_layout(
             height=450,
             xaxis_title='Periode',
             yaxis_title='Quantity (Units)',
+            barmode='group',  # Bar berdampingan
             hovermode='x unified',
             plot_bgcolor='white',
             legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
@@ -1139,7 +1069,7 @@ with tab_sku:
         )
         
         st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"📅 Periode data: {main_df['Month_Label'].iloc[0]} - {main_df['Month_Label'].iloc[-1]} | Total {len(main_df)} bulan")
+        st.caption(f"📅 Periode data: {main_df['Month_Label'].iloc[0]} - {main_df['Month_Label'].iloc[-1]} | Total {len(main_df)} bulan | 📊 Bar = Sales & Inbound | 📈 Line = PO")
     else:
         st.info("📊 Tidak ada data Sales, PO, atau Inbound untuk SKU ini")
     
