@@ -827,14 +827,47 @@ with tab_sku:
         st.error("❌ Tidak ada data SKU ditemukan.")
         st.stop()
     
+    # --- Control Panel ---
     st.markdown('<div class="control-panel">', unsafe_allow_html=True)
+    
+    col_sku1, col_sku2, col_refresh = st.columns([2.5, 2.5, 0.8])
+    
+    with col_sku1:
+        st.markdown('<div class="control-label">📦 SKU UTAMA (Referensi)</div>', unsafe_allow_html=True)
+        sku_display_map = {}
+        sku_display_list = []
+        for sku in all_skus:
+            product_row = df_product[df_product['SKU_ID'] == sku]
+            if not product_row.empty:
+                product_name = product_row.iloc[0].get('Product_Name', '')
+                display = f"{sku} - {product_name}" if product_name else sku
+            else:
+                display = f"{sku} (No Product Data)"
+            sku_display_map[display] = sku
+            sku_display_list.append(display)
+        
+        selected_main_display = st.selectbox("SKU Utama", sku_display_list, key="main_sku")
+    
+    with col_sku2:
+        st.markdown('<div class="control-label">🔄 SKU PEMBANDING (Opsional)</div>', unsafe_allow_html=True)
+        compare_options = ["[Tidak ada perbandingan]"] + sku_display_list
+        selected_compare_display = st.selectbox("SKU Pembanding", compare_options, key="compare_sku")
+    
+    with col_refresh:
+        st.markdown('<div class="control-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # --- Ambil SKU ID ---
     main_sku = sku_display_map[selected_main_display]
     compare_sku = sku_display_map[selected_compare_display] if selected_compare_display != "[Tidak ada perbandingan]" else None
     
+    # --- Hitung Metrik ---
     main_metrics = calculate_sku_metrics(df_sales, df_po, df_po_delivered, main_sku, df_product)
+    
     
     status_class = "status-active" if main_metrics['status'] == 'ACTIVE' else "status-inactive" if main_metrics['status'] == 'INACTIVE' else "status-notfound"
     status_text = main_metrics['status'] if main_metrics['status'] != 'NOT_FOUND' else "TIDAK ADA DI PRODUCT MASTER"
