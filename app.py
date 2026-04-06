@@ -1029,6 +1029,12 @@ with tab_sku:
         compare_metrics = None
         compare_df = None
     
+    # Inisialisasi session state untuk filter periode
+    if 'filter_start_date' not in st.session_state:
+        st.session_state.filter_start_date = None
+    if 'filter_end_date' not in st.session_state:
+        st.session_state.filter_end_date = None
+    
     if not main_df.empty:
         # --- FILTER RANGE BULAN ---
         min_date, max_date = get_date_range_from_df(main_df)
@@ -1053,6 +1059,10 @@ with tab_sku:
             start_date = datetime.strptime(start_idx, '%b %Y')
             end_date = datetime.strptime(end_idx, '%b %Y')
             
+            # Simpan ke session state untuk digunakan di Total Quantity Summary
+            st.session_state.filter_start_date = start_date
+            st.session_state.filter_end_date = end_date
+            
             # Filter main_df
             main_df_filtered = main_df[(main_df['Month'] >= start_date) & (main_df['Month'] <= end_date)].copy()
             
@@ -1066,7 +1076,10 @@ with tab_sku:
         else:
             main_df_filtered = main_df
             compare_df_filtered = compare_df
+            st.session_state.filter_start_date = None
+            st.session_state.filter_end_date = None
             st.caption(f"📅 Periode data: {main_df['Month_Label'].iloc[0]} - {main_df['Month_Label'].iloc[-1]} | Total {len(main_df)} bulan")
+        
         
         # --- Buat Chart dengan data yang sudah difilter ---
         if not main_df_filtered.empty:
@@ -1228,47 +1241,94 @@ with tab_sku:
             </div>
             """, unsafe_allow_html=True)
     
-    # TOTAL QTY SUMMARY (Pengganti Financial Summary)
+    # TOTAL QTY SUMMARY (BERDASARKAN FILTER PERIODE)
     st.markdown("---")
     st.subheader("📊 Total Quantity Summary")
+    
+    # Fungsi untuk menghitung total berdasarkan periode filter
+    def get_filtered_totals(metrics, start_date, end_date):
+        """Hitung total Qty berdasarkan periode filter"""
+        result = {
+            'total_sales': 0,
+            'total_po': 0,
+            'total_inbound': 0
+        }
+        
+        # Filter Sales
+        if not metrics['sales_data'].empty:
+            sales_filtered = metrics['sales_data']
+            if start_date and end_date:
+                sales_filtered = sales_filtered[(sales_filtered['Month'] >= start_date) & (sales_filtered['Month'] <= end_date)]
+            result['total_sales'] = sales_filtered['Sales_Qty'].sum()
+        
+        # Filter PO
+        if not metrics['po_data'].empty:
+            po_filtered = metrics['po_data']
+            if start_date and end_date:
+                po_filtered = po_filtered[(po_filtered['Month'] >= start_date) & (po_filtered['Month'] <= end_date)]
+            result['total_po'] = po_filtered['PO_Qty'].sum()
+        
+        # Filter Inbound
+        if not metrics['po_delivered_data'].empty:
+            inbound_filtered = metrics['po_delivered_data']
+            if start_date and end_date:
+                inbound_filtered = inbound_filtered[(inbound_filtered['Month'] >= start_date) & (inbound_filtered['Month'] <= end_date)]
+            result['total_inbound'] = inbound_filtered['PO_Delivered_Qty'].sum()
+        
+        return result
+    
+    # Ambil periode filter dari session state
+    filter_start = st.session_state.get('filter_start_date', None)
+    filter_end = st.session_state.get('filter_end_date', None)
+    
+    # Hitung total berdasarkan filter
+    main_filtered_totals = get_filtered_totals(main_metrics, filter_start, filter_end)
     
     col_qty1, col_qty2, col_qty3, col_qty4 = st.columns(4)
     
     with col_qty1:
-        st.metric("📈 TOTAL SALES", f"{main_metrics['total_sales']:,.0f}",
-                  help="Total unit terjual (Sales)")
+        st.metric("📈 TOTAL SALES", f"{main_filtered_totals['total_sales']:,.0f}",
+                  help=f"Total unit terjual periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
     
     with col_qty2:
-        st.metric("📦 TOTAL PO", f"{main_metrics['total_po']:,.0f}",
-                  help="Total unit dipesan (Purchase Order)")
+        st.metric("📦 TOTAL PO", f"{main_filtered_totals['total_po']:,.0f}",
+                  help=f"Total unit dipesan periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
     
     with col_qty3:
-        st.metric("📥 TOTAL INBOUND", f"{main_metrics['total_po_delivered']:,.0f}",
-                  help="Total unit sudah masuk gudang")
+        st.metric("📥 TOTAL INBOUND", f"{main_filtered_totals['total_inbound']:,.0f}",
+                  help=f"Total unit sudah masuk periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
     
     with col_qty4:
         # Hitung selisih
-        inbound_gap = main_metrics['total_po_delivered'] - main_metrics['total_sales']
+        inbound_gap = main_filtered_totals['total_inbound'] - main_filtered_totals['total_sales']
         gap_color = "normal" if inbound_gap >= 0 else "inverse"
         st.metric("⚖️ GAP (Inbound - Sales)", f"{inbound_gap:+,.0f}",
-                  delta=f"{inbound_gap/main_metrics['total_sales']*100:.1f}% dari Sales" if main_metrics['total_sales'] > 0 else None,
+                  delta=f"{inbound_gap/main_filtered_totals['total_sales']*100:.1f}% dari Sales" if main_filtered_totals['total_sales'] > 0 else None,
                   delta_color=gap_color,
                   help="Selisih antara barang masuk vs barang terjual")
     
-    # Jika ada SKU pembanding, tampilkan perbandingan Total Qty
+    # Tampilkan informasi periode yang sedang ditampilkan
+    if filter_start and filter_end:
+        st.caption(f"📊 Data periode: **{filter_start.strftime('%b %Y')}** - **{filter_end.strftime('%b %Y')}**")
+    else:
+        st.caption("📊 Data dari seluruh periode yang tersedia")
+    
+    # Jika ada SKU pembanding, tampilkan perbandingan Total Qty berdasarkan filter yang sama
     if compare_sku and compare_metrics:
-        st.markdown(f'<div class="small-text" style="margin-top:8px;">📊 <strong>Perbandingan Qty dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
+        compare_filtered_totals = get_filtered_totals(compare_metrics, filter_start, filter_end)
+        
+        st.markdown(f'<div class="small-text" style="margin-top:8px;">📊 <strong>Perbandingan Qty dengan {compare_sku} (periode yang sama)</strong></div>', unsafe_allow_html=True)
         
         col_c1, col_c2, col_c3 = st.columns(3)
         with col_c1:
-            st.metric("Sales", f"{compare_metrics['total_sales']:,.0f}", 
-                      delta=f"{compare_metrics['total_sales'] - main_metrics['total_sales']:+,.0f}")
+            st.metric("Sales", f"{compare_filtered_totals['total_sales']:,.0f}", 
+                      delta=f"{compare_filtered_totals['total_sales'] - main_filtered_totals['total_sales']:+,.0f}")
         with col_c2:
-            st.metric("PO", f"{compare_metrics['total_po']:,.0f}",
-                      delta=f"{compare_metrics['total_po'] - main_metrics['total_po']:+,.0f}")
+            st.metric("PO", f"{compare_filtered_totals['total_po']:,.0f}",
+                      delta=f"{compare_filtered_totals['total_po'] - main_filtered_totals['total_po']:+,.0f}")
         with col_c3:
-            st.metric("Inbound", f"{compare_metrics['total_po_delivered']:,.0f}",
-                      delta=f"{compare_metrics['total_po_delivered'] - main_metrics['total_po_delivered']:+,.0f}")
+            st.metric("Inbound", f"{compare_filtered_totals['total_inbound']:,.0f}",
+                      delta=f"{compare_filtered_totals['total_inbound'] - main_filtered_totals['total_inbound']:+,.0f}")
     
     # DETAIL DATA PER BULAN
     with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
