@@ -1337,8 +1337,21 @@ with tab_sales_analytics:
                 
                 # Show pareto SKUs
                 with st.expander("📋 Lihat Daftar SKU Pareto (80%)"):
+                    # Pilih kolom yang tersedia
+                    display_cols = []
+                    if 'SKU_ID' in pareto_80.columns:
+                        display_cols.append('SKU_ID')
+                    if 'Product_Name' in pareto_80.columns:
+                        display_cols.append('Product_Name')
+                    if 'Brand' in pareto_80.columns:
+                        display_cols.append('Brand')
+                    if 'SKU_Tier' in pareto_80.columns:
+                        display_cols.append('SKU_Tier')
+                    display_cols.append('Sales_Qty')
+                    display_cols.append('Cumulative_Percent')
+                    
                     st.dataframe(
-                        pareto_80[['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Sales_Qty', 'Cumulative_Percent']],
+                        pareto_80[display_cols],
                         column_config={
                             'Cumulative_Percent': st.column_config.NumberColumn('Cumulative %', format='%.1f%%')
                         },
