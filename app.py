@@ -526,6 +526,12 @@ def get_tier_performance(df):
     if df.empty:
         return pd.DataFrame()
     
+    # Pastikan kolom SKU_Tier ada
+    if 'SKU_Tier' not in df.columns:
+        # Buat kolom default jika tidak ada
+        df = df.copy()
+        df['SKU_Tier'] = 'Unknown'
+    
     tier_stats = df.groupby('SKU_Tier').agg({
         'SKU_ID': 'nunique',
         'Sales_Qty': 'sum',
@@ -543,6 +549,11 @@ def get_status_performance(df):
     if df.empty:
         return pd.DataFrame()
     
+    # Pastikan kolom Status ada
+    if 'Status' not in df.columns:
+        df = df.copy()
+        df['Status'] = 'UNKNOWN'
+    
     status_stats = df.groupby('Status').agg({
         'SKU_ID': 'nunique',
         'Sales_Qty': 'sum',
@@ -555,9 +566,19 @@ def get_status_performance(df):
 def calculate_pareto(df, top_percent=80):
     """Pareto analysis: find SKUs that contribute top X% of sales"""
     if df.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
     
-    sku_sales = df.groupby(['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier'])['Sales_Qty'].sum().reset_index()
+    # Pastikan kolom yang diperlukan ada
+    group_cols = ['SKU_ID']
+    if 'Product_Name' in df.columns:
+        group_cols.append('Product_Name')
+    if 'Brand' in df.columns:
+        group_cols.append('Brand')
+    if 'SKU_Tier' in df.columns:
+        group_cols.append('SKU_Tier')
+    
+    # Group by SKU
+    sku_sales = df.groupby(group_cols)['Sales_Qty'].sum().reset_index()
     sku_sales = sku_sales.sort_values('Sales_Qty', ascending=False)
     sku_sales['Cumulative_Qty'] = sku_sales['Sales_Qty'].cumsum()
     sku_sales['Cumulative_Percent'] = (sku_sales['Cumulative_Qty'] / sku_sales['Sales_Qty'].sum()) * 100
@@ -596,6 +617,11 @@ def get_brand_growth_matrix(df):
     df_2026 = df[df['Year'] == 2026].copy() if 2026 in df['Year'].values else pd.DataFrame()
     
     brand_stats = []
+    
+    # Pastikan kolom Brand ada
+    if 'Brand' not in df.columns:
+        return pd.DataFrame()
+    
     brands = df['Brand'].unique()
     
     for brand in brands:
