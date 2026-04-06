@@ -16,110 +16,127 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Custom CSS ---
+# --- Custom CSS (Compact Version) ---
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.2rem;
+        font-size: 1.8rem;
         font-weight: 900;
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
         text-align: center;
     }
     .sub-header {
         text-align: center;
         color: #666;
-        margin-bottom: 2rem;
-        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        font-size: 0.8rem;
     }
     .sku-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        border-radius: 12px;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 1rem;
         color: white;
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
     }
-    .sku-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.5rem; }
-    .sku-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .sku-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .sku-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
     .badge {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 16px;
+        font-size: 0.65rem;
         font-weight: 600;
         background: rgba(255,255,255,0.2);
         backdrop-filter: blur(4px);
     }
     .sku-stats { text-align: right; }
-    .stat-label { font-size: 0.7rem; opacity: 0.8; text-transform: uppercase; }
-    .stat-value { font-size: 1.4rem; font-weight: 700; }
+    .stat-label { font-size: 0.6rem; opacity: 0.8; text-transform: uppercase; }
+    .stat-value { font-size: 1rem; font-weight: 700; }
     
     .metric-card {
         background: white;
-        border-radius: 12px;
-        padding: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        border-top: 3px solid;
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        border-top: 2px solid;
         text-align: center;
-        transition: transform 0.2s;
     }
-    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .metric-value { font-size: 1.8rem; font-weight: 800; }
-    .metric-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+    .metric-value { font-size: 1.3rem; font-weight: 800; line-height: 1.2; }
+    .metric-label { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+    .metric-sub { font-size: 0.6rem; color: #999; margin-top: 2px; }
     
-    .filter-panel {
+    .control-panel {
         background: #f8f9fa;
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
         display: flex;
         gap: 1rem;
         flex-wrap: wrap;
         align-items: flex-end;
     }
-    .filter-item { flex: 1; min-width: 150px; }
-    .filter-label { font-size: 0.7rem; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; }
+    .control-item { flex: 1; min-width: 200px; }
+    .control-label { font-size: 0.65rem; font-weight: 600; color: #666; margin-bottom: 2px; text-transform: uppercase; }
     
     .diagnostic-box {
         background: #F8FAFC;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 0.75rem;
-        border-left: 4px solid;
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        margin-bottom: 0.5rem;
+        border-left: 3px solid;
     }
-    .diagnostic-title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .diagnostic-desc { font-size: 0.85rem; color: #4B5563; margin-left: 28px; }
+    .diagnostic-title { font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
+    .diagnostic-desc { font-size: 0.75rem; color: #4B5563; margin-left: 24px; }
     
     .status-active {
         background: #10B981;
         color: white;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 16px;
+        font-size: 0.65rem;
         font-weight: 600;
         display: inline-block;
     }
     .status-inactive {
         background: #EF4444;
         color: white;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 16px;
+        font-size: 0.65rem;
         font-weight: 600;
         display: inline-block;
     }
-    hr { margin: 1.5rem 0; }
+    .status-notfound {
+        background: #9CA3AF;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 16px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    hr { margin: 1rem 0; }
+    .small-text { font-size: 0.7rem; color: #666; }
+    .compare-badge {
+        background: #8B5CF6;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 16px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Header ---
 st.markdown('<h1 class="main-header">📊 SKU 360° Evaluator Pro</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Analisis Performa SKU: Perbandingan Sales vs Purchase Order</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Analisis Performa SKU: Perbandingan Sales vs Purchase Order | Support Perbandingan 2 SKU</p>', unsafe_allow_html=True)
 
 # --- Koneksi Google Sheets ---
 @st.cache_resource(show_spinner=False)
@@ -186,6 +203,7 @@ def load_data(_client):
             df_sales25_long['Month'] = df_sales25_long['Month_Label'].apply(parse_month)
             df_sales25_long['Year'] = 2025
             
+            # Map OLD_Material ke SKU_ID
             if 'OLD_Material' in df_sales25_long.columns:
                 if 'OLD_Material' in df_product.columns:
                     sku_mapping = df_product[['OLD_Material', 'SKU_ID']].drop_duplicates()
@@ -277,7 +295,8 @@ def format_rupiah(value):
     else:
         return f"Rp {value:,.0f}"
 
-def calculate_sku_metrics(df_sales, df_po, sku_id):
+def calculate_sku_metrics(df_sales, df_po, sku_id, df_product):
+    """Hitung metrik untuk SKU tertentu"""
     metrics = {
         'sales_data': pd.DataFrame(),
         'po_data': pd.DataFrame(),
@@ -285,15 +304,30 @@ def calculate_sku_metrics(df_sales, df_po, sku_id):
         'total_po': 0,
         'avg_monthly_sales': 0,
         'avg_monthly_po': 0,
-        'last_sales_month': None,
-        'last_po_month': None,
         'months_with_sales': 0,
-        'months_with_po': 0
+        'months_with_po': 0,
+        'floor_price': 0,
+        'purchase_price': 0,
+        'status': 'NOT_FOUND',
+        'product_name': sku_id,
+        'brand': '-',
+        'tier': '-',
+        'moq': 0
     }
     
-    sales_sku = df_sales[df_sales['SKU_ID'] == sku_id].copy() if not df_sales.empty else pd.DataFrame()
-    po_sku = df_po[df_po['SKU_ID'] == sku_id].copy() if not df_po.empty else pd.DataFrame()
+    # Ambil data dari Product Master jika ada
+    product_data = df_product[df_product['SKU_ID'] == sku_id]
+    if not product_data.empty:
+        metrics['floor_price'] = product_data.iloc[0].get('Floor_Price', 0)
+        metrics['purchase_price'] = product_data.iloc[0].get('Purchase_Order_Price', 0)
+        metrics['status'] = product_data.iloc[0].get('Status', 'NOT_FOUND')
+        metrics['product_name'] = product_data.iloc[0].get('Product_Name', sku_id)
+        metrics['brand'] = product_data.iloc[0].get('Brand', '-')
+        metrics['tier'] = product_data.iloc[0].get('SKU_Tier', '-')
+        metrics['moq'] = product_data.iloc[0].get('MOQ', 0)
     
+    # Sales data
+    sales_sku = df_sales[df_sales['SKU_ID'] == sku_id].copy() if not df_sales.empty else pd.DataFrame()
     if not sales_sku.empty:
         sales_monthly = sales_sku.groupby('Month')['Sales_Qty'].sum().reset_index()
         sales_monthly = sales_monthly.sort_values('Month')
@@ -301,9 +335,10 @@ def calculate_sku_metrics(df_sales, df_po, sku_id):
         metrics['total_sales'] = sales_monthly['Sales_Qty'].sum()
         metrics['months_with_sales'] = len(sales_monthly)
         if not sales_monthly.empty:
-            metrics['last_sales_month'] = sales_monthly['Month'].max()
             metrics['avg_monthly_sales'] = sales_monthly['Sales_Qty'].mean()
     
+    # PO data
+    po_sku = df_po[df_po['SKU_ID'] == sku_id].copy() if not df_po.empty else pd.DataFrame()
     if not po_sku.empty:
         po_monthly = po_sku.groupby('Month')['PO_Qty'].sum().reset_index()
         po_monthly = po_monthly.sort_values('Month')
@@ -311,10 +346,27 @@ def calculate_sku_metrics(df_sales, df_po, sku_id):
         metrics['total_po'] = po_monthly['PO_Qty'].sum()
         metrics['months_with_po'] = len(po_monthly)
         if not po_monthly.empty:
-            metrics['last_po_month'] = po_monthly['Month'].max()
             metrics['avg_monthly_po'] = po_monthly['PO_Qty'].mean()
     
     return metrics
+
+def get_all_skus_from_data(df_sales, df_po, df_product):
+    """Dapatkan semua SKU unik dari Sales, PO, dan Product Master"""
+    sku_set = set()
+    
+    if not df_sales.empty:
+        sku_set.update(df_sales['SKU_ID'].dropna().unique())
+    
+    if not df_po.empty:
+        sku_set.update(df_po['SKU_ID'].dropna().unique())
+    
+    if not df_product.empty:
+        sku_set.update(df_product['SKU_ID'].dropna().unique())
+    
+    # Filter out NaN
+    sku_set = {s for s in sku_set if pd.notna(s) and str(s).strip() != ''}
+    
+    return sorted(list(sku_set))
 
 # --- Load Data ---
 client = init_gsheet_connection()
@@ -328,237 +380,254 @@ with st.spinner('🔄 Loading data...'):
     df_sales = all_data.get('sales', pd.DataFrame())
     df_po = all_data.get('po', pd.DataFrame())
 
-if df_product.empty:
-    st.error("❌ Data Product Master kosong.")
+# --- Dapatkan semua SKU unik ---
+all_skus = get_all_skus_from_data(df_sales, df_po, df_product)
+
+if not all_skus:
+    st.error("❌ Tidak ada data SKU ditemukan.")
     st.stop()
 
-# --- FILTER PANEL (di halaman utama, bukan sidebar) ---
-st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
+# --- Control Panel ---
+st.markdown('<div class="control-panel">', unsafe_allow_html=True)
 
-col_filter1, col_filter2, col_filter3, col_filter4, col_filter5 = st.columns([1.5, 1.5, 2, 1, 0.8])
+col_sku1, col_sku2, col_chart, col_refresh = st.columns([2, 2, 1.5, 0.8])
 
-with col_filter1:
-    st.markdown('<div class="filter-label">🏷️ FILTER BRAND</div>', unsafe_allow_html=True)
-    brands = ['Semua'] + sorted(df_product['Brand'].dropna().unique().tolist()) if 'Brand' in df_product.columns else ['Semua']
-    selected_brand = st.selectbox("Brand", brands, label_visibility="collapsed")
+with col_sku1:
+    st.markdown('<div class="control-label">📦 SKU UTAMA (Referensi)</div>', unsafe_allow_html=True)
+    # Buat mapping display name
+    sku_display_map = {}
+    sku_display_list = []
+    for sku in all_skus:
+        # Cari nama produk dari Product Master
+        product_row = df_product[df_product['SKU_ID'] == sku]
+        if not product_row.empty:
+            product_name = product_row.iloc[0].get('Product_Name', '')
+            display = f"{sku} - {product_name}" if product_name else sku
+        else:
+            display = f"{sku} (No Product Data)"
+        sku_display_map[display] = sku
+        sku_display_list.append(display)
+    
+    selected_main_display = st.selectbox("SKU Utama", sku_display_list, key="main_sku")
 
-with col_filter2:
-    st.markdown('<div class="filter-label">💎 FILTER TIER</div>', unsafe_allow_html=True)
-    tiers = ['Semua'] + sorted(df_product['SKU_Tier'].dropna().unique().tolist()) if 'SKU_Tier' in df_product.columns else ['Semua']
-    selected_tier = st.selectbox("Tier", tiers, label_visibility="collapsed")
+with col_sku2:
+    st.markdown('<div class="control-label">🔄 SKU PEMBANDING (Opsional)</div>', unsafe_allow_html=True)
+    compare_options = ["[Tidak ada perbandingan]"] + sku_display_list
+    selected_compare_display = st.selectbox("SKU Pembanding", compare_options, key="compare_sku")
 
-with col_filter3:
-    st.markdown('<div class="filter-label">🔍 CARI SKU</div>', unsafe_allow_html=True)
-    search_term = st.text_input("Cari SKU atau Nama Produk", placeholder="Ketik SKU ID atau nama...", label_visibility="collapsed")
-
-with col_filter4:
-    st.markdown('<div class="filter-label">📊 TIPE CHART</div>', unsafe_allow_html=True)
+with col_chart:
+    st.markdown('<div class="control-label">📊 TIPE CHART</div>', unsafe_allow_html=True)
     chart_type = st.selectbox("Chart Type", ["Bar Chart", "Line Chart"], label_visibility="collapsed")
 
-with col_filter5:
-    st.markdown('<div class="filter-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
+with col_refresh:
+    st.markdown('<div class="control-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
     if st.button("🔄 Refresh", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Filter SKU ---
-filtered_skus = df_product.copy()
+# --- Ambil SKU ID ---
+main_sku = sku_display_map[selected_main_display]
+compare_sku = sku_display_map[selected_compare_display] if selected_compare_display != "[Tidak ada perbandingan]" else None
 
-if selected_brand != 'Semua':
-    filtered_skus = filtered_skus[filtered_skus['Brand'] == selected_brand]
-
-if selected_tier != 'Semua':
-    filtered_skus = filtered_skus[filtered_skus['SKU_Tier'] == selected_tier]
-
-if search_term:
-    filtered_skus = filtered_skus[
-        filtered_skus['SKU_ID'].astype(str).str.contains(search_term, case=False, na=False) |
-        filtered_skus['Product_Name'].astype(str).str.contains(search_term, case=False, na=False)
-    ]
-
-# --- Dropdown SKU Utama ---
-sku_options = filtered_skus.apply(
-    lambda x: f"{x['SKU_ID']} - {x.get('Product_Name', '')}", axis=1
-).tolist()
-
-if not sku_options:
-    st.warning("⚠️ Tidak ada SKU yang sesuai dengan filter.")
-    st.stop()
-
-selected_sku_display = st.selectbox("📦 Pilih SKU untuk Dianalisis", sku_options, index=0)
-selected_sku = selected_sku_display.split(" - ")[0].strip()
-
-# --- Ambil Data SKU dari Product Master ---
-sku_master = df_product[df_product['SKU_ID'] == selected_sku]
-if sku_master.empty:
-    st.error(f"SKU {selected_sku} tidak ditemukan")
-    st.stop()
-
-sku_master = sku_master.iloc[0]
-product_name = sku_master.get('Product_Name', 'Unknown')
-brand = sku_master.get('Brand', 'Unknown')
-tier = sku_master.get('SKU_Tier', 'Standard')
-floor_price = sku_master.get('Floor_Price', 0)
-purchase_price = sku_master.get('Purchase_Order_Price', 0)
-moq = sku_master.get('MOQ', 0)
-status = sku_master.get('Status', 'ACTIVE')
-
-# --- Hitung Metrik SKU ---
-metrics = calculate_sku_metrics(df_sales, df_po, selected_sku)
+# --- Hitung Metrik untuk SKU Utama ---
+main_metrics = calculate_sku_metrics(df_sales, df_po, main_sku, df_product)
 
 # =============================================================================
-# HEADER SKU (dengan Status)
+# HEADER SKU UTAMA (Compact)
 # =============================================================================
-status_badge = '<span class="status-active">ACTIVE</span>' if status == 'ACTIVE' else '<span class="status-inactive">INACTIVE</span>'
+status_class = "status-active" if main_metrics['status'] == 'ACTIVE' else "status-inactive" if main_metrics['status'] == 'INACTIVE' else "status-notfound"
+status_text = main_metrics['status'] if main_metrics['status'] != 'NOT_FOUND' else "TIDAK ADA DI PRODUCT MASTER"
 
 st.markdown(f"""
 <div class="sku-header">
     <div>
-        <div class="sku-title">{product_name} <span style="font-size:0.9rem;">({selected_sku})</span></div>
+        <div class="sku-title">{main_metrics['product_name']} <span style="font-size:0.8rem;">({main_sku})</span></div>
         <div class="sku-badges">
-            <span class="badge">🏷️ {brand}</span>
-            <span class="badge">💎 {tier}</span>
-            <span class="badge">📦 MOQ: {moq:,.0f}</span>
-            <span class="badge">💰 Harga: {format_rupiah(floor_price)}</span>
-            {status_badge}
+            <span class="badge">🏷️ {main_metrics['brand']}</span>
+            <span class="badge">💎 {main_metrics['tier']}</span>
+            <span class="badge">📦 MOQ: {main_metrics['moq']:,.0f}</span>
+            <span class="{status_class}">{status_text}</span>
         </div>
     </div>
     <div class="sku-stats">
-        <div class="stat-label">STATUS</div>
-        <div class="stat-value">{status}</div>
+        <div class="stat-label">FLOOR PRICE</div>
+        <div class="stat-value">{format_rupiah(main_metrics['floor_price'])}</div>
+        <div class="stat-label" style="margin-top:4px;">PURCHASE PRICE</div>
+        <div class="stat-value">{format_rupiah(main_metrics['purchase_price'])}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# METRIC CARDS (4 buah: Total Sales, Total PO, Avg Monthly Sales, Avg Monthly PO)
+# METRIC CARDS (Compact - 4 kolom)
 # =============================================================================
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown(f"""
     <div class="metric-card" style="border-top-color: #10B981;">
-        <div class="metric-value">{metrics['total_sales']:,.0f}</div>
+        <div class="metric-value">{main_metrics['total_sales']:,.0f}</div>
         <div class="metric-label">📈 TOTAL SALES</div>
-        <div style="font-size:0.7rem; color:#666;">{metrics['months_with_sales']} bulan aktif</div>
+        <div class="metric-sub">{main_metrics['months_with_sales']} bulan aktif</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown(f"""
     <div class="metric-card" style="border-top-color: #F59E0B;">
-        <div class="metric-value">{metrics['total_po']:,.0f}</div>
+        <div class="metric-value">{main_metrics['total_po']:,.0f}</div>
         <div class="metric-label">📦 TOTAL PO</div>
-        <div style="font-size:0.7rem; color:#666;">{metrics['months_with_po']} bulan order</div>
+        <div class="metric-sub">{main_metrics['months_with_po']} bulan order</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col3:
     st.markdown(f"""
     <div class="metric-card" style="border-top-color: #6366F1;">
-        <div class="metric-value">{metrics['avg_monthly_sales']:.0f}</div>
+        <div class="metric-value">{main_metrics['avg_monthly_sales']:.0f}</div>
         <div class="metric-label">📊 AVG MONTHLY SALES</div>
-        <div style="font-size:0.7rem; color:#666;">Rata-rata per bulan</div>
+        <div class="metric-sub">Rata-rata per bulan</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col4:
     st.markdown(f"""
     <div class="metric-card" style="border-top-color: #8B5CF6;">
-        <div class="metric-value">{metrics['avg_monthly_po']:.0f}</div>
+        <div class="metric-value">{main_metrics['avg_monthly_po']:.0f}</div>
         <div class="metric-label">🎯 AVG MONTHLY PO</div>
-        <div style="font-size:0.7rem; color:#666;">Rata-rata order per bulan</div>
+        <div class="metric-sub">Rata-rata order per bulan</div>
     </div>
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# TREND CHART (Sales vs PO) dengan pilihan Line atau Bar
+# TREND CHART (Support 2 SKU)
 # =============================================================================
 st.markdown("---")
 st.subheader("📈 Tren Sales vs Purchase Order")
 
-# Gabungkan data
-combined_data = []
-if not metrics['sales_data'].empty:
-    for _, row in metrics['sales_data'].iterrows():
-        combined_data.append({
-            'Month': row['Month'],
-            'Month_Label': row['Month'].strftime('%b %Y'),
-            'Sales': row['Sales_Qty'],
-            'PO': 0,
-            'Year': row['Month'].year
-        })
-
-if not metrics['po_data'].empty:
-    for _, row in metrics['po_data'].iterrows():
-        existing = next((x for x in combined_data if x['Month'] == row['Month']), None)
-        if existing:
-            existing['PO'] = row['PO_Qty']
-        else:
-            combined_data.append({
+# Fungsi untuk menyiapkan data SKU
+def prepare_chart_data(sku_id, metrics, label, color_sales, color_po):
+    combined = []
+    if not metrics['sales_data'].empty:
+        for _, row in metrics['sales_data'].iterrows():
+            combined.append({
                 'Month': row['Month'],
                 'Month_Label': row['Month'].strftime('%b %Y'),
-                'Sales': 0,
-                'PO': row['PO_Qty'],
-                'Year': row['Month'].year
+                f'{label}_Sales': row['Sales_Qty'],
+                f'{label}_PO': 0
             })
-
-if combined_data:
-    df_trend = pd.DataFrame(combined_data)
-    df_trend = df_trend.sort_values('Month')
     
+    if not metrics['po_data'].empty:
+        for _, row in metrics['po_data'].iterrows():
+            existing = next((x for x in combined if x['Month'] == row['Month']), None)
+            if existing:
+                existing[f'{label}_PO'] = row['PO_Qty']
+            else:
+                combined.append({
+                    'Month': row['Month'],
+                    'Month_Label': row['Month'].strftime('%b %Y'),
+                    f'{label}_Sales': 0,
+                    f'{label}_PO': row['PO_Qty']
+                })
+    
+    df = pd.DataFrame(combined) if combined else pd.DataFrame()
+    return df.sort_values('Month') if not df.empty else df
+
+# Prepare data
+main_df = prepare_chart_data(main_sku, main_metrics, 'Main', '#10B981', '#F59E0B')
+compare_df = None
+if compare_sku:
+    compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
+    compare_df = prepare_chart_data(compare_sku, compare_metrics, 'Compare', '#8B5CF6', '#EC4899')
+
+# Buat chart
+if not main_df.empty:
     fig = go.Figure()
     
+    # SKU Utama - Sales
     if chart_type == "Bar Chart":
         fig.add_trace(go.Bar(
-            x=df_trend['Month_Label'],
-            y=df_trend['Sales'],
-            name='Sales Aktual',
+            x=main_df['Month_Label'], y=main_df['Main_Sales'],
+            name=f'{main_sku} - Sales',
             marker_color='#10B981',
-            text=df_trend['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['Main_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='outside'
         ))
         fig.add_trace(go.Bar(
-            x=df_trend['Month_Label'],
-            y=df_trend['PO'],
-            name='Purchase Order',
+            x=main_df['Month_Label'], y=main_df['Main_PO'],
+            name=f'{main_sku} - PO',
             marker_color='#F59E0B',
-            text=df_trend['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            text=main_df['Main_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='outside'
         ))
-        fig.update_layout(barmode='group')
-    else:  # Line Chart
+    else:
         fig.add_trace(go.Scatter(
-            x=df_trend['Month_Label'],
-            y=df_trend['Sales'],
-            name='Sales Aktual',
+            x=main_df['Month_Label'], y=main_df['Main_Sales'],
+            name=f'{main_sku} - Sales',
             mode='lines+markers',
-            line=dict(color='#10B981', width=3),
-            marker=dict(size=8, color='#10B981'),
-            text=df_trend['Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            line=dict(color='#10B981', width=2.5),
+            marker=dict(size=6, color='#10B981'),
+            text=main_df['Main_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='top center'
         ))
         fig.add_trace(go.Scatter(
-            x=df_trend['Month_Label'],
-            y=df_trend['PO'],
-            name='Purchase Order',
+            x=main_df['Month_Label'], y=main_df['Main_PO'],
+            name=f'{main_sku} - PO',
             mode='lines+markers',
-            line=dict(color='#F59E0B', width=3, dash='dash'),
-            marker=dict(size=8, color='#F59E0B', symbol='diamond'),
-            text=df_trend['PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+            line=dict(color='#F59E0B', width=2.5, dash='dash'),
+            marker=dict(size=6, color='#F59E0B', symbol='diamond'),
+            text=main_df['Main_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
             textposition='top center'
         ))
     
+    # SKU Pembanding (jika ada)
+    if compare_df is not None and not compare_df.empty:
+        if chart_type == "Bar Chart":
+            fig.add_trace(go.Bar(
+                x=compare_df['Month_Label'], y=compare_df['Compare_Sales'],
+                name=f'{compare_sku} - Sales',
+                marker_color='#8B5CF6',
+                text=compare_df['Compare_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='outside'
+            ))
+            fig.add_trace(go.Bar(
+                x=compare_df['Month_Label'], y=compare_df['Compare_PO'],
+                name=f'{compare_sku} - PO',
+                marker_color='#EC4899',
+                text=compare_df['Compare_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='outside'
+            ))
+            fig.update_layout(barmode='group')
+        else:
+            fig.add_trace(go.Scatter(
+                x=compare_df['Month_Label'], y=compare_df['Compare_Sales'],
+                name=f'{compare_sku} - Sales',
+                mode='lines+markers',
+                line=dict(color='#8B5CF6', width=2.5),
+                marker=dict(size=6, color='#8B5CF6'),
+                text=compare_df['Compare_Sales'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='top center'
+            ))
+            fig.add_trace(go.Scatter(
+                x=compare_df['Month_Label'], y=compare_df['Compare_PO'],
+                name=f'{compare_sku} - PO',
+                mode='lines+markers',
+                line=dict(color='#EC4899', width=2.5, dash='dash'),
+                marker=dict(size=6, color='#EC4899', symbol='diamond'),
+                text=compare_df['Compare_PO'].apply(lambda x: f"{x:,.0f}" if x > 0 else ""),
+                textposition='top center'
+            ))
+    
     fig.update_layout(
-        height=450,
+        height=400,
         xaxis_title='Periode',
         yaxis_title='Quantity (Units)',
         hovermode='x unified',
         plot_bgcolor='white',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(t=50, b=40)
+        margin=dict(t=40, b=40, l=20, r=20)
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -571,110 +640,148 @@ else:
 st.markdown("---")
 st.subheader("🩺 Smart Diagnostics & Rekomendasi")
 
-diagnoses = []
+def get_diagnostics(metrics, sku_label=""):
+    diagnoses = []
+    prefix = f"**{sku_label}** " if sku_label else ""
+    
+    if metrics['months_with_sales'] >= 4:
+        sales_df = metrics['sales_data'].sort_values('Month')
+        if len(sales_df) >= 4:
+            recent_3 = sales_df.tail(3)['Sales_Qty'].mean()
+            prev_3 = sales_df.iloc[-6:-3]['Sales_Qty'].mean() if len(sales_df) >= 6 else recent_3
+            
+            if prev_3 > 0:
+                growth = (recent_3 - prev_3) / prev_3 * 100
+                if growth > 30:
+                    diagnoses.append(("🚀", f"{prefix}Surging Demand", f"Sales naik {growth:.1f}% dalam 3 bulan terakhir. Siapkan stok!", "#10B981"))
+                elif growth > 10:
+                    diagnoses.append(("📈", f"{prefix}Positive Growth", f"Sales meningkat {growth:.1f}%. Pertahankan momentum!", "#3B82F6"))
+                elif growth < -30:
+                    diagnoses.append(("📉", f"{prefix}Declining Demand", f"Sales turun {abs(growth):.1f}%. Evaluasi strategi!", "#EF4444"))
+                elif growth < -10:
+                    diagnoses.append(("🔻", f"{prefix}Negative Growth", f"Sales turun {abs(growth):.1f}%. Perlu investigasi.", "#F59E0B"))
+                else:
+                    diagnoses.append(("🟢", f"{prefix}Stable Demand", f"Sales stabil (perubahan {growth:+.1f}%).", "#10B981"))
+    elif metrics['months_with_sales'] > 0:
+        diagnoses.append(("ℹ️", f"{prefix}Limited Data", f"Hanya {metrics['months_with_sales']} bulan data. Pantau rutin.", "#6B7280"))
+    else:
+        diagnoses.append(("⚠️", f"{prefix}No Sales Data", "Belum ada riwayat penjualan. Order trial.", "#F59E0B"))
+    
+    if metrics['total_po'] > 0 and metrics['total_sales'] > 0:
+        sell_through = (metrics['total_sales'] / metrics['total_po'] * 100)
+        if sell_through < 40:
+            diagnoses.append(("📦", f"{prefix}Low Sell-Through", f"Hanya {sell_through:.1f}% PO terjual. Risiko dead stock!", "#EF4444"))
+        elif sell_through > 100:
+            diagnoses.append(("🔥", f"{prefix}High Demand", f"Sales {sell_through:.0f}% > PO. Potensi lost sales!", "#F59E0B"))
+    
+    return diagnoses
 
-# Analisis Trend Sales (naik/turun)
-if metrics['months_with_sales'] >= 4:
-    sales_df = metrics['sales_data'].sort_values('Month')
-    if len(sales_df) >= 4:
-        # Bandingkan 3 bulan terakhir vs 3 bulan sebelumnya
-        recent_3 = sales_df.tail(3)['Sales_Qty'].mean()
-        prev_3 = sales_df.iloc[-6:-3]['Sales_Qty'].mean() if len(sales_df) >= 6 else recent_3
-        
-        if prev_3 > 0:
-            growth = (recent_3 - prev_3) / prev_3 * 100
-            if growth > 30:
-                diagnoses.append(("🚀", "Surging Demand (Meningkat Drastis)", 
-                                 f"Sales rata-rata 3 bulan terakhir naik {growth:.1f}% dibanding periode sebelumnya. 🔥 Siapkan stok tambahan!", "#10B981"))
-            elif growth > 10:
-                diagnoses.append(("📈", "Positive Growth (Tren Naik)", 
-                                 f"Sales meningkat {growth:.1f}% dalam 3 bulan terakhir. Pertahankan momentum!", "#3B82F6"))
-            elif growth < -30:
-                diagnoses.append(("📉", "Declining Demand (Tren Turun Drastis)", 
-                                 f"Sales turun {abs(growth):.1f}% dalam 3 bulan terakhir. ⚠️ Evaluasi ulang strategi!", "#EF4444"))
-            elif growth < -10:
-                diagnoses.append(("🔻", "Negative Growth (Tren Turun)", 
-                                 f"Sales turun {abs(growth):.1f}%. Perlu investigasi penyebab penurunan.", "#F59E0B"))
-            else:
-                diagnoses.append(("🟢", "Stable Demand (Stabil)", 
-                                 f"Sales relatif stabil (perubahan {growth:+.1f}%). Lanjutkan strategi saat ini.", "#10B981"))
-elif metrics['months_with_sales'] > 0:
-    diagnoses.append(("ℹ️", "Data Terbatas", 
-                     f"Hanya {metrics['months_with_sales']} bulan data sales. Pantau secara rutin untuk melihat trend.", "#6B7280"))
-else:
-    diagnoses.append(("⚠️", "No Sales Data", 
-                     "SKU ini belum memiliki riwayat penjualan. Order dengan hati-hati (trial order).", "#F59E0B"))
-
-# Analisis Gap Sales vs PO (jika ada data)
-if metrics['total_po'] > 0 and metrics['total_sales'] > 0:
-    sell_through = (metrics['total_sales'] / metrics['total_po'] * 100)
-    if sell_through < 40:
-        diagnoses.append(("📦", "Low Sell-Through (Penjualan Rendah)", 
-                         f"Hanya {sell_through:.1f}% dari total PO yang terjual. Risiko dead stock tinggi!", "#EF4444"))
-    elif sell_through > 100:
-        diagnoses.append(("🔥", "High Demand (Melebihi PO)", 
-                         f"Sales {sell_through:.0f}% melebihi PO. Potensi lost sales! Segera tambah order.", "#F59E0B"))
-    elif sell_through < 80:
-        diagnoses.append(("⚠️", "Moderate Sell-Through", 
-                         f"{sell_through:.1f}% terjual. Masih ada stok tersisa untuk dijual.", "#F59E0B"))
-
-# Tampilkan diagnosa
+# Tampilkan diagnosa SKU Utama
+diagnoses = get_diagnostics(main_metrics, "")
 for icon, title, desc, color in diagnoses:
     bg_color = "#F0FDF4" if "🟢" in icon else "#FEF2F2" if "🔴" in icon or "📉" in icon else "#FFFBEB"
     st.markdown(f"""
     <div class="diagnostic-box" style="background:{bg_color}; border-left-color:{color};">
         <div class="diagnostic-title">
-            <span style="font-size:1.2rem;">{icon}</span> {title}
+            <span style="font-size:1rem;">{icon}</span> {title}
         </div>
         <div class="diagnostic-desc">{desc}</div>
     </div>
     """, unsafe_allow_html=True)
 
+# Jika ada SKU pembanding, tampilkan juga
+if compare_sku:
+    st.markdown(f'<div class="small-text" style="margin-top:8px;">🔍 <strong>Perbandingan dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
+    compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
+    compare_diagnoses = get_diagnostics(compare_metrics, f"{compare_sku}")
+    for icon, title, desc, color in compare_diagnoses:
+        bg_color = "#F0FDF4" if "🟢" in icon else "#FEF2F2" if "🔴" in icon or "📉" in icon else "#FFFBEB"
+        st.markdown(f"""
+        <div class="diagnostic-box" style="background:{bg_color}; border-left-color:{color}; padding:0.4rem 1rem;">
+            <div class="diagnostic-title" style="font-size:0.8rem;">
+                <span style="font-size:0.9rem;">{icon}</span> {title}
+            </div>
+            <div class="diagnostic-desc" style="font-size:0.7rem;">{desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # =============================================================================
-# FINANCIAL SUMMARY (Total PO Value vs Total Sales Value)
+# FINANCIAL SUMMARY (PO Value = PO × Purchase_Order_Price, Sales Value = Sales × Floor_Price)
 # =============================================================================
 st.markdown("---")
 st.subheader("💰 Financial Summary")
 
-total_po_value = metrics['total_po'] * floor_price
-total_sales_value = metrics['total_sales'] * floor_price
-gap_value = total_po_value - total_sales_value
+# SKU Utama
+po_value_main = main_metrics['total_po'] * main_metrics['purchase_price']
+sales_value_main = main_metrics['total_sales'] * main_metrics['floor_price']
+gap_main = po_value_main - sales_value_main
 
 col_fin1, col_fin2, col_fin3 = st.columns(3)
 
 with col_fin1:
-    st.metric("Total PO Value", format_rupiah(total_po_value), 
-              help="Nilai total Purchase Order berdasarkan Floor Price")
+    st.metric(f"📦 {main_sku} - Total PO Value", format_rupiah(po_value_main),
+              help=f"PO Qty × Purchase Price ({format_rupiah(main_metrics['purchase_price'])}/unit)")
 
 with col_fin2:
-    st.metric("Total Sales Value", format_rupiah(total_sales_value),
-              help="Nilai total Penjualan berdasarkan Floor Price")
+    st.metric(f"💰 {main_sku} - Total Sales Value", format_rupiah(sales_value_main),
+              help=f"Sales Qty × Floor Price ({format_rupiah(main_metrics['floor_price'])}/unit)")
 
 with col_fin3:
-    delta_color = "normal" if gap_value >= 0 else "inverse"
-    st.metric("Gap (PO - Sales)", format_rupiah(gap_value), 
-              delta=f"{gap_value/total_po_value*100:.1f}% dari PO" if total_po_value > 0 else None,
+    delta_color = "normal" if gap_main >= 0 else "inverse"
+    st.metric(f"⚖️ {main_sku} - Gap", format_rupiah(gap_main),
+              delta=f"{gap_main/po_value_main*100:.1f}% dari PO" if po_value_main > 0 else None,
               delta_color=delta_color)
 
-# Peringatan jika harga 0
-if floor_price == 0:
-    st.warning("⚠️ Floor_Price = 0, nilai finansial bersifat estimasi. Periksa data Product Master.")
+# Jika ada SKU pembanding, tampilkan ringkasan perbandingan
+if compare_sku:
+    compare_metrics = calculate_sku_metrics(df_sales, df_po, compare_sku, df_product)
+    po_value_comp = compare_metrics['total_po'] * compare_metrics['purchase_price']
+    sales_value_comp = compare_metrics['total_sales'] * compare_metrics['floor_price']
+    
+    st.markdown(f'<div class="small-text" style="margin-top:8px;">📊 <strong>Perbandingan dengan {compare_sku}</strong></div>', unsafe_allow_html=True)
+    
+    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+    with col_c1:
+        st.metric("Total PO", f"{compare_metrics['total_po']:,.0f}", 
+                  delta=f"{compare_metrics['total_po'] - main_metrics['total_po']:+,.0f}")
+    with col_c2:
+        st.metric("Total Sales", f"{compare_metrics['total_sales']:,.0f}",
+                  delta=f"{compare_metrics['total_sales'] - main_metrics['total_sales']:+,.0f}")
+    with col_c3:
+        st.metric("PO Value", format_rupiah(po_value_comp),
+                  delta=f"{format_rupiah(po_value_comp - po_value_main)}")
+    with col_c4:
+        st.metric("Sales Value", format_rupiah(sales_value_comp),
+                  delta=f"{format_rupiah(sales_value_comp - sales_value_main)}")
+
+# Peringatan harga
+if main_metrics['floor_price'] == 0 or main_metrics['purchase_price'] == 0:
+    st.warning("⚠️ Harga (Floor_Price atau Purchase_Order_Price) = 0. Periksa data Product Master.")
 
 # =============================================================================
-# DETAIL DATA PER BULAN (Tabel)
+# DETAIL DATA PER BULAN
 # =============================================================================
 st.markdown("---")
 with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
-    if combined_data:
-        detail_df = pd.DataFrame(combined_data).sort_values('Month')
+    if not main_df.empty:
+        detail_df = main_df.copy()
         detail_df['Bulan'] = detail_df['Month'].dt.strftime('%b %Y')
-        detail_df['Sales'] = detail_df['Sales'].apply(lambda x: f"{x:,.0f}")
-        detail_df['PO'] = detail_df['PO'].apply(lambda x: f"{x:,.0f}")
-        detail_df['Sales Value'] = (detail_df['Sales'].str.replace(',', '').astype(float) * floor_price).apply(format_rupiah)
-        detail_df['PO Value'] = (detail_df['PO'].str.replace(',', '').astype(float) * floor_price).apply(format_rupiah)
+        detail_df['Sales Qty'] = detail_df['Main_Sales'].apply(lambda x: f"{x:,.0f}")
+        detail_df['PO Qty'] = detail_df['Main_PO'].apply(lambda x: f"{x:,.0f}")
+        detail_df['Sales Value'] = (detail_df['Main_Sales'] * main_metrics['floor_price']).apply(format_rupiah)
+        detail_df['PO Value'] = (detail_df['Main_PO'] * main_metrics['purchase_price']).apply(format_rupiah)
         
-        display_cols = ['Bulan', 'Sales', 'Sales Value', 'PO', 'PO Value']
+        display_cols = ['Bulan', 'Sales Qty', 'Sales Value', 'PO Qty', 'PO Value']
         st.dataframe(detail_df[display_cols], use_container_width=True, hide_index=True)
+        
+        # Jika ada SKU pembanding, tampilkan juga datanya
+        if compare_sku and compare_df is not None and not compare_df.empty:
+            st.markdown(f'<div class="small-text" style="margin-top:12px;">📊 <strong>Data {compare_sku}</strong></div>', unsafe_allow_html=True)
+            compare_detail = compare_df.copy()
+            compare_detail['Bulan'] = compare_detail['Month'].dt.strftime('%b %Y')
+            compare_detail['Sales Qty'] = compare_detail['Compare_Sales'].apply(lambda x: f"{x:,.0f}")
+            compare_detail['PO Qty'] = compare_detail['Compare_PO'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(compare_detail[['Bulan', 'Sales Qty', 'PO Qty']], use_container_width=True, hide_index=True)
     else:
         st.info("Tidak ada data")
 
@@ -683,7 +790,7 @@ with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
 # =============================================================================
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #888; font-size: 0.75rem; padding: 1rem;">
-    <p>📊 SKU 360° Evaluator Pro | Data Sales 2025-2026 | Data PO hingga Mar 2026</p>
+<div style="text-align: center; color: #888; font-size: 0.7rem; padding: 0.5rem;">
+    <p>📊 SKU 360° Evaluator Pro | Data Sales 2025-2026 | Data PO hingga Mar 2026 | Support Perbandingan 2 SKU</p>
 </div>
 """, unsafe_allow_html=True)
