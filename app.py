@@ -997,73 +997,7 @@ with tab_sku:
             elif stock_metrics['expiring_3months'] > 0:
                 st.info(f"ℹ️ Terdapat {stock_metrics['expiring_3months']:,.0f} unit stok yang akan EXPIRED dalam 1-3 bulan.")
     
-    # STOCK METRIC CARDS
-    st.markdown("---")
-    st.subheader("📦 Stock Onhand Analysis")
-    
-    stock_metrics = calculate_stock_metrics(df_stock, df_product, main_sku, main_metrics['avg_monthly_sales'])
-    
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-    
-    with col_s1:
-        st.markdown(f"""
-        <div class="metric-card" style="border-top-color: #3B82F6;">
-            <div class="metric-value">{stock_metrics['total_stock']:,.0f}</div>
-            <div class="metric-label">📦 TOTAL STOCK</div>
-            <div class="metric-sub">{stock_metrics['batch_count']} batch</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_s2:
-        st.markdown(f"""
-        <div class="metric-card" style="border-top-color: #10B981;">
-            <div class="metric-value">{stock_metrics['fresh_stock']:,.0f}</div>
-            <div class="metric-label">✅ FRESH STOCK</div>
-            <div class="metric-sub">> 6 bulan</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_s3:
-        warning_stock = stock_metrics['expiring_soon'] + stock_metrics['expiring_3months'] + stock_metrics['expiring_6months']
-        color = "#EF4444" if stock_metrics['expiring_soon'] > 0 else "#F59E0B" if stock_metrics['expiring_3months'] > 0 else "#6B7280"
-        st.markdown(f"""
-        <div class="metric-card" style="border-top-color: {color};">
-            <div class="metric-value">{warning_stock:,.0f}</div>
-            <div class="metric-label">⚠️ EXPIRING SOON</div>
-            <div class="metric-sub">≤ 6 bulan</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_s4:
-        health_status, health_color, health_desc = get_stock_health_status(stock_metrics, main_metrics['avg_monthly_sales'])
-        st.markdown(f"""
-        <div class="metric-card" style="border-top-color: {health_color};">
-            <div class="metric-value" style="font-size: 1rem;">{health_status}</div>
-            <div class="metric-label">🏥 STOCK HEALTH</div>
-            <div class="metric-sub">{health_desc}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    if stock_metrics['has_stock'] and not stock_metrics['batch_details'].empty:
-        with st.expander("📋 Lihat Detail Batch per SKU", expanded=False):
-            batch_df = stock_metrics['batch_details'].copy()
-            batch_df['Expiry_Date'] = batch_df['Expiry_Date'].dt.strftime('%d %b %Y') if not batch_df['Expiry_Date'].isna().all() else 'N/A'
-            batch_df = batch_df.rename(columns={
-                'Batch_Number': 'Batch Number',
-                'Physical_Stock': 'Stock Qty',
-                'Expiry_Date': 'Expiry Date'
-            })
-            st.dataframe(batch_df, use_container_width=True, hide_index=True)
-            
-            if stock_metrics['expired_stock'] > 0:
-                st.error(f"⚠️ Terdapat {stock_metrics['expired_stock']:,.0f} unit stok yang sudah EXPIRED! Segera lakukan disposisi.")
-            elif stock_metrics['expiring_soon'] > 0:
-                st.warning(f"⚠️ Terdapat {stock_metrics['expiring_soon']:,.0f} unit stok yang akan EXPIRED dalam 30 hari.")
-            elif stock_metrics['expiring_3months'] > 0:
-                st.info(f"ℹ️ Terdapat {stock_metrics['expiring_3months']:,.0f} unit stok yang akan EXPIRED dalam 1-3 bulan.")
-    else:
-        st.info("📦 Tidak ada data stok untuk SKU ini")
-    
+        
     # TREND CHART - COMBO CHART (Sales & Inbound = Bar, PO = Line)
     st.markdown("---")
     st.subheader("📈 Tren Sales vs PO vs Inbound")
