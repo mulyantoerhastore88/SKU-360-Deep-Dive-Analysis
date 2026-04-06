@@ -900,54 +900,102 @@ with tab_sku:
     </div>
     """, unsafe_allow_html=True)
     
-    # METRIC CARDS
-    with st.expander("📊 Lihat Detail Metrik SKU", expanded=False):
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            st.markdown(f"""
-            <div class="metric-card" style="border-top-color: #10B981;">
-                <div class="metric-value">{main_metrics['total_sales']:,.0f}</div>
-                <div class="metric-label">📈 TOTAL SALES</div>
-                <div class="metric-sub">{main_metrics['months_with_sales']} bulan aktif</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="metric-card" style="border-top-color: #F59E0B;">
-                <div class="metric-value">{main_metrics['total_po']:,.0f}</div>
-                <div class="metric-label">📦 TOTAL PO</div>
-                <div class="metric-sub">{main_metrics['months_with_po']} bulan order</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div class="metric-card" style="border-top-color: #3B82F6;">
-                <div class="metric-value">{main_metrics['total_po_delivered']:,.0f}</div>
-                <div class="metric-label">📥 TOTAL INBOUND</div>
-                <div class="metric-sub">{main_metrics['months_with_po_delivered']} bulan inbound</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown(f"""
-            <div class="metric-card" style="border-top-color: #6366F1;">
-                <div class="metric-value">{main_metrics['avg_monthly_sales']:.0f}</div>
-                <div class="metric-label">📊 AVG MONTHLY SALES</div>
-                <div class="metric-sub">Rata-rata per bulan</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col5:
-            st.markdown(f"""
-            <div class="metric-card" style="border-top-color: #8B5CF6;">
-                <div class="metric-value">{main_metrics['avg_monthly_po']:.0f}</div>
-                <div class="metric-label">🎯 AVG MONTHLY PO</div>
-                <div class="metric-sub">Rata-rata order per bulan</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # =========================================================================
+    # METRIC CARDS UTAMA (Stock Onhand, Avg Sales 3M, Stock Cover)
+    # =========================================================================
+    
+    # Hitung Avg Sales Last 3 Months
+    avg_sales_3m = 0
+    if not main_metrics['sales_data'].empty:
+        sales_df = main_metrics['sales_data'].sort_values('Month')
+        last_3_months = sales_df.tail(3)
+        if not last_3_months.empty:
+            avg_sales_3m = last_3_months['Sales_Qty'].mean()
+    
+    # Hitung Stock Cover
+    stock_cover = 0
+    stock_cover_status = ""
+    stock_cover_color = "#10B981"
+    if stock_metrics['has_stock'] and avg_sales_3m > 0:
+        stock_cover = stock_metrics['total_stock'] / avg_sales_3m
+        if stock_cover < 1:
+            stock_cover_status = "⚠️ KRITIS"
+            stock_cover_color = "#EF4444"
+        elif stock_cover < 2:
+            stock_cover_status = "🟡 AMAN"
+            stock_cover_color = "#F59E0B"
+        elif stock_cover > 6:
+            stock_cover_status = "📦 OVERSTOCK"
+            stock_cover_color = "#F59E0B"
+        else:
+            stock_cover_status = "🟢 IDEAL"
+            stock_cover_color = "#10B981"
+    elif stock_metrics['has_stock'] and avg_sales_3m == 0:
+        stock_cover = 999
+        stock_cover_status = "❌ NO SALES"
+        stock_cover_color = "#9CA3AF"
+    else:
+        stock_cover_status = "⚪ NO STOCK"
+        stock_cover_color = "#9CA3AF"
+    
+    # Tampilkan 3 Metric Cards
+    col_m1, col_m2, col_m3 = st.columns(3)
+    
+    with col_m1:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #3B82F6;">
+            <div class="metric-value">{stock_metrics['total_stock']:,.0f}</div>
+            <div class="metric-label">📦 STOCK ONHAND</div>
+            <div class="metric-sub">{stock_metrics['batch_count']} batch | Total stok gudang</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_m2:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #6366F1;">
+            <div class="metric-value">{avg_sales_3m:.0f}</div>
+            <div class="metric-label">📊 AVG SALES (Last 3 Months)</div>
+            <div class="metric-sub">Rata-rata penjualan per bulan</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_m3:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: {stock_cover_color};">
+            <div class="metric-value">{stock_cover:.1f} <span style="font-size:0.8rem;">bulan</span></div>
+            <div class="metric-label">📦 STOCK COVER</div>
+            <div class="metric-sub">{stock_cover_status}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Informasi tambahan
+    if stock_metrics['has_stock'] and avg_sales_3m > 0:
+        st.caption(f"💡 **Insight:** Dengan stok {stock_metrics['total_stock']:,.0f} unit dan rata-rata penjualan {avg_sales_3m:.0f} unit/bulan, stok akan habis dalam **{stock_cover:.1f} bulan**.")
+    elif stock_metrics['has_stock'] and avg_sales_3m == 0:
+        st.warning("⚠️ **Perhatian:** Ada stok tapi tidak ada penjualan dalam 3 bulan terakhir. Risiko dead stock!")
+    elif not stock_metrics['has_stock']:
+        st.info("ℹ️ Tidak ada data stok untuk SKU ini.")
+    
+    # =========================================================================
+    # DETAIL BATCH (Collapsible)
+    # =========================================================================
+    if stock_metrics['has_stock'] and not stock_metrics['batch_details'].empty:
+        with st.expander("📋 Lihat Detail Batch per SKU", expanded=False):
+            batch_df = stock_metrics['batch_details'].copy()
+            batch_df['Expiry_Date'] = batch_df['Expiry_Date'].dt.strftime('%d %b %Y') if not batch_df['Expiry_Date'].isna().all() else 'N/A'
+            batch_df = batch_df.rename(columns={
+                'Batch_Number': 'Batch Number',
+                'Physical_Stock': 'Stock Qty',
+                'Expiry_Date': 'Expiry Date'
+            })
+            st.dataframe(batch_df, use_container_width=True, hide_index=True)
+            
+            if stock_metrics['expired_stock'] > 0:
+                st.error(f"⚠️ Terdapat {stock_metrics['expired_stock']:,.0f} unit stok yang sudah EXPIRED! Segera lakukan disposisi.")
+            elif stock_metrics['expiring_soon'] > 0:
+                st.warning(f"⚠️ Terdapat {stock_metrics['expiring_soon']:,.0f} unit stok yang akan EXPIRED dalam 30 hari.")
+            elif stock_metrics['expiring_3months'] > 0:
+                st.info(f"ℹ️ Terdapat {stock_metrics['expiring_3months']:,.0f} unit stok yang akan EXPIRED dalam 1-3 bulan.")
     
     # STOCK METRIC CARDS
     st.markdown("---")
@@ -1361,20 +1409,69 @@ with tab_sku:
 # =============================================================================
 with tab_sales_analytics:
     st.subheader("📊 Sales Analytics Pro")
-    st.caption("Deep Dive Analysis: Brand, Tier, Status, Growth Matrix, Seasonality & Pareto")
+    st.caption("Deep Dive Analysis: Multi-Brand Comparison, Range Filter, Growth Matrix, Seasonality & Pareto")
     
     if df_sales_analysis.empty:
         st.warning("⚠️ Tidak ada data sales untuk dianalisis.")
     else:
-        available_years = sorted(df_sales_analysis['Year'].unique())
-        selected_years = st.multiselect("📅 Filter Tahun", available_years, default=available_years, key="sales_analytics_year")
+        # --- FILTER PANEL ---
+        st.markdown('<div class="control-panel">', unsafe_allow_html=True)
         
-        df_filtered = df_sales_analysis[df_sales_analysis['Year'].isin(selected_years)] if selected_years else df_sales_analysis
+        col_filter1, col_filter2, col_filter3 = st.columns([1, 1.5, 1])
+        
+        with col_filter1:
+            st.markdown('<div class="control-label">📅 RANGE PERIODE</div>', unsafe_allow_html=True)
+            # Get date range from data
+            all_dates = sorted(df_sales_analysis['Month'].unique())
+            min_date = all_dates[0]
+            max_date = all_dates[-1]
+            
+            date_options = [d.strftime('%b %Y') for d in all_dates]
+            start_idx, end_idx = st.select_slider(
+                "Pilih Range",
+                options=date_options,
+                value=(date_options[0], date_options[-1]),
+                key="sales_range_slider",
+                label_visibility="collapsed"
+            )
+            
+            start_date = datetime.strptime(start_idx, '%b %Y')
+            end_date = datetime.strptime(end_idx, '%b %Y')
+        
+        with col_filter2:
+            st.markdown('<div class="control-label">🏷️ PILIH BRAND</div>', unsafe_allow_html=True)
+            all_brands = sorted(df_sales_analysis['Brand'].unique())
+            selected_brands = st.multiselect(
+                "Brand",
+                options=all_brands,
+                default=all_brands[:5] if len(all_brands) > 5 else all_brands,
+                key="brand_multiselect",
+                label_visibility="collapsed"
+            )
+        
+        with col_filter3:
+            st.markdown('<div class="control-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
+            if st.button("🔄 Refresh Analytics", use_container_width=True, key="refresh_analytics"):
+                st.cache_data.clear()
+                st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # --- FILTER DATA ---
+        df_filtered = df_sales_analysis[
+            (df_sales_analysis['Month'] >= start_date) & 
+            (df_sales_analysis['Month'] <= end_date)
+        ].copy()
+        
+        if selected_brands:
+            df_filtered = df_filtered[df_filtered['Brand'].isin(selected_brands)]
         
         if df_filtered.empty:
-            st.warning("Tidak ada data untuk periode yang dipilih.")
+            st.warning("⚠️ Tidak ada data untuk periode dan brand yang dipilih.")
         else:
-            # Executive Summary
+            # =========================================================================
+            # ROW 1: EXECUTIVE SUMMARY CARDS
+            # =========================================================================
             st.markdown("### 🎯 Executive Summary")
             
             total_qty = df_filtered['Sales_Qty'].sum()
@@ -1393,67 +1490,95 @@ with tab_sales_analytics:
             with col_s4:
                 st.metric("Active Brand", f"{unique_brands:,}")
             
-            # Top Brands
+            # Informasi periode yang dipilih
+            st.caption(f"📅 Data periode: **{start_idx}** - **{end_idx}** | {len(selected_brands)} Brand dipilih")
+            
+            # =========================================================================
+            # ROW 2: MULTI-BRAND COMPARISON CHART
+            # =========================================================================
             st.markdown("---")
-            st.markdown("### 🏆 Top Brands Performance")
+            st.markdown("### 📊 Multi-Brand Sales Comparison")
             
-            col_b1, col_b2 = st.columns(2)
+            # Aggregate per brand per month
+            brand_monthly = df_filtered.groupby(['Brand', df_filtered['Month'].dt.to_period('M')])['Sales_Qty'].sum().reset_index()
+            brand_monthly['Month'] = brand_monthly['Month'].dt.to_timestamp()
+            brand_monthly['Month_Label'] = brand_monthly['Month'].dt.strftime('%b %Y')
             
-            with col_b1:
-                top_brands_qty = get_top_brands(df_filtered, 'Sales_Qty', 10)
-                fig_top_brands_qty = px.bar(
-                    top_brands_qty, x='Brand', y='Total_Sales_Qty',
-                    title='Top 10 Brands by Sales Quantity',
-                    text=top_brands_qty['Total_Sales_Qty'].apply(lambda x: f"{x:,.0f}"),
-                    color='Total_Sales_Qty',
+            # Pivot for chart
+            pivot_data = brand_monthly.pivot(index='Month_Label', columns='Brand', values='Sales_Qty').fillna(0)
+            
+            # Create chart
+            fig_brand_comp = go.Figure()
+            
+            colors = px.colors.qualitative.Set3 + px.colors.qualitative.Pastel
+            for i, brand in enumerate(pivot_data.columns):
+                fig_brand_comp.add_trace(go.Scatter(
+                    x=pivot_data.index,
+                    y=pivot_data[brand],
+                    name=brand,
+                    mode='lines+markers',
+                    line=dict(width=2, color=colors[i % len(colors)]),
+                    marker=dict(size=6),
+                    stackgroup=None
+                ))
+            
+            fig_brand_comp.update_layout(
+                height=450,
+                title='Monthly Sales by Brand',
+                xaxis_title='Periode',
+                yaxis_title='Sales Quantity',
+                hovermode='x unified',
+                plot_bgcolor='white',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            )
+            
+            st.plotly_chart(fig_brand_comp, use_container_width=True)
+            
+            # =========================================================================
+            # ROW 3: BRAND SUMMARY TABLE & BAR CHART
+            # =========================================================================
+            st.markdown("---")
+            st.markdown("### 📊 Brand Performance Summary")
+            
+            col_bs1, col_bs2 = st.columns(2)
+            
+            with col_bs1:
+                # Bar chart total per brand
+                brand_total = df_filtered.groupby('Brand')['Sales_Qty'].sum().reset_index()
+                brand_total = brand_total.sort_values('Sales_Qty', ascending=False)
+                
+                fig_brand_bar = px.bar(
+                    brand_total, x='Brand', y='Sales_Qty',
+                    title='Total Sales Quantity by Brand',
+                    text=brand_total['Sales_Qty'].apply(lambda x: f"{x:,.0f}"),
+                    color='Sales_Qty',
                     color_continuous_scale='Greens'
                 )
-                fig_top_brands_qty.update_traces(textposition='outside')
-                fig_top_brands_qty.update_layout(height=400, xaxis_tickangle=-45)
-                st.plotly_chart(fig_top_brands_qty, use_container_width=True)
+                fig_brand_bar.update_traces(textposition='outside')
+                fig_brand_bar.update_layout(height=400, xaxis_tickangle=-45)
+                st.plotly_chart(fig_brand_bar, use_container_width=True)
             
-            with col_b2:
-                top_brands_value = get_top_brands(df_filtered, 'Sales_Value', 10)
-                fig_top_brands_value = px.bar(
-                    top_brands_value, x='Brand', y='Total_Sales_Value',
-                    title='Top 10 Brands by Sales Value',
-                    text=top_brands_value['Total_Sales_Value'].apply(lambda x: format_rupiah(x)),
-                    color='Total_Sales_Value',
-                    color_continuous_scale='Blues'
+            with col_bs2:
+                # Summary table
+                brand_summary = df_filtered.groupby('Brand').agg({
+                    'SKU_ID': 'nunique',
+                    'Sales_Qty': 'sum',
+                    'Sales_Value': 'sum'
+                }).reset_index()
+                brand_summary.columns = ['Brand', 'SKU Count', 'Total Sales Qty', 'Total Sales Value']
+                brand_summary = brand_summary.sort_values('Total Sales Qty', ascending=False)
+                brand_summary['Total Sales Value'] = brand_summary['Total Sales Value'].apply(format_rupiah)
+                
+                st.dataframe(
+                    brand_summary,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400
                 )
-                fig_top_brands_value.update_traces(textposition='outside')
-                fig_top_brands_value.update_layout(height=400, xaxis_tickangle=-45)
-                st.plotly_chart(fig_top_brands_value, use_container_width=True)
             
-            # Market Share
-            st.markdown("#### 📊 Market Share Distribution")
-            col_ms1, col_ms2 = st.columns(2)
-            
-            with col_ms1:
-                market_share_qty = get_top_brands(df_filtered, 'Sales_Qty', 8)
-                fig_donut_qty = px.pie(
-                    market_share_qty, values='Total_Sales_Qty', names='Brand',
-                    title='Market Share by Quantity',
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Set3
-                )
-                fig_donut_qty.update_traces(textposition='inside', textinfo='percent+label')
-                fig_donut_qty.update_layout(height=400)
-                st.plotly_chart(fig_donut_qty, use_container_width=True)
-            
-            with col_ms2:
-                market_share_value = get_top_brands(df_filtered, 'Sales_Value', 8)
-                fig_donut_value = px.pie(
-                    market_share_value, values='Total_Sales_Value', names='Brand',
-                    title='Market Share by Value',
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                fig_donut_value.update_traces(textposition='inside', textinfo='percent+label')
-                fig_donut_value.update_layout(height=400)
-                st.plotly_chart(fig_donut_value, use_container_width=True)
-            
-            # Tier & Status
+            # =========================================================================
+            # ROW 4: TIER & STATUS ANALYSIS (dengan filter yang sama)
+            # =========================================================================
             st.markdown("---")
             st.markdown("### 💎 SKU Tier & Status Analysis")
             
@@ -1498,11 +1623,15 @@ with tab_sales_analytics:
                     
                     st.dataframe(status_performance, use_container_width=True, hide_index=True)
             
-            # Growth Matrix
+            # =========================================================================
+            # ROW 5: GROWTH MATRIX (BCG-like)
+            # =========================================================================
             st.markdown("---")
             st.markdown("### 📈 Growth Matrix (Brand Performance)")
             
-            brand_growth = get_brand_growth_matrix(df_filtered)
+            # Filter untuk growth matrix (butuh data 2025 vs 2026)
+            df_growth = df_filtered.copy()
+            brand_growth = get_brand_growth_matrix(df_growth)
             if not brand_growth.empty:
                 fig_growth = px.scatter(
                     brand_growth, x='Market_Share', y='Growth_2026',
@@ -1520,20 +1649,23 @@ with tab_sales_analytics:
                 fig_growth.update_traces(textposition='top center')
                 fig_growth.add_hline(y=10, line_dash="dash", line_color="gray", annotation_text="Growth Threshold")
                 fig_growth.add_vline(x=10, line_dash="dash", line_color="gray", annotation_text="Share Threshold")
-                fig_growth.update_layout(height=500, xaxis_range=[0, brand_growth['Market_Share'].max() * 1.1])
+                fig_growth.update_layout(height=500)
                 st.plotly_chart(fig_growth, use_container_width=True)
                 
                 st.info("💡 **Insight:** Star brands are your growth engines. Question Marks need investment. Cash Cows fund operations. Dogs need evaluation.")
             else:
-                st.info("Data tidak cukup untuk analisis growth (butuh data 2025 & 2026).")
+                st.info("Data tidak cukup untuk analisis growth (butuh data 2025 & 2026 untuk brand yang dipilih).")
             
-            # Seasonality
+            # =========================================================================
+            # ROW 6: SEASONALITY & MONTHLY TREND
+            # =========================================================================
             st.markdown("---")
             st.markdown("### 🌙 Seasonality & Monthly Pattern")
             
             col_szn1, col_szn2 = st.columns(2)
             
             with col_szn1:
+                # Monthly trend
                 monthly_trend = df_filtered.groupby(df_filtered['Month'].dt.to_period('M'))['Sales_Qty'].sum().reset_index()
                 monthly_trend['Month'] = monthly_trend['Month'].dt.to_timestamp()
                 monthly_trend['Month_Label'] = monthly_trend['Month'].dt.strftime('%b %Y')
@@ -1549,6 +1681,7 @@ with tab_sales_analytics:
                 st.plotly_chart(fig_monthly, use_container_width=True)
             
             with col_szn2:
+                # Seasonality pattern
                 seasonality = get_seasonality_pattern(df_filtered)
                 if not seasonality.empty:
                     fig_season = px.bar(
@@ -1568,7 +1701,9 @@ with tab_sales_analytics:
                     low_month = seasonality.loc[seasonality['Seasonal_Index'].idxmin(), 'Month_Name']
                     st.caption(f"📊 **Peak Season:** {peak_month} | **Low Season:** {low_month}")
             
-            # Pareto Analysis
+            # =========================================================================
+            # ROW 7: PARETO ANALYSIS (80/20 RULE)
+            # =========================================================================
             st.markdown("---")
             st.markdown("### 🎯 Pareto Analysis (80/20 Rule)")
             
@@ -1615,7 +1750,7 @@ with tab_sales_analytics:
                 <div class="insight-card">
                     <div class="insight-title">📊 PARETO INSIGHT</div>
                     <div class="insight-value">{len(pareto_80)} SKU</div>
-                    <div class="insight-desc">meng贡献 {pareto_80['Cumulative_Percent'].iloc[-1]:.1f}% dari total sales</div>
+                    <div class="insight-desc">menyumbang {pareto_80['Cumulative_Percent'].iloc[-1]:.1f}% dari total sales</div>
                     <hr style="margin: 10px 0; opacity:0.3;">
                     <div class="insight-title">🎯 RECOMMENDATION</div>
                     <div class="insight-desc">
@@ -1648,7 +1783,9 @@ with tab_sales_analytics:
                         hide_index=True
                     )
             
-            # MoM Growth
+            # =========================================================================
+            # ROW 8: MoM GROWTH TREND
+            # =========================================================================
             st.markdown("---")
             st.markdown("### 📉 Month-over-Month Growth Analysis")
             
@@ -1678,11 +1815,13 @@ with tab_sales_analytics:
                 avg_growth = growth_metrics['MoM_Growth_Qty'].mean()
                 st.caption(f"📈 **Average MoM Growth:** {avg_growth:+.1f}%")
             
-            # Data Explorer
+            # =========================================================================
+            # ROW 9: DATA EXPLORER
+            # =========================================================================
             st.markdown("---")
             with st.expander("📋 Data Explorer - Raw Sales Data", expanded=False):
                 st.dataframe(df_filtered, use_container_width=True, height=400)
-
+                
 # =============================================================================
 # TAB 3: STOCK ANALYSIS
 # =============================================================================
