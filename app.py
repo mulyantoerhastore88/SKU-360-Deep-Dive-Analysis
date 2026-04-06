@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 # --- Konfigurasi Halaman ---
 st.set_page_config(
     page_title="SKU Evaluator Pro",
-   page_icon="📊",
+    page_icon="📊",
     layout="wide"
 )
 
@@ -138,7 +138,7 @@ st.markdown("""
 
 # --- Header ---
 st.markdown('<h1 class="main-header">📊 SKU 360° Evaluator Pro</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Analisis Performa SKU | Perbandingan Sales vs PO | Deep Dive Analytics</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Analisis Performa SKU | Perbandingan Sales vs PO | Deep Dive Analytics | Stock Management</p>', unsafe_allow_html=True)
 
 # --- Koneksi Google Sheets ---
 @st.cache_resource(show_spinner=False)
@@ -251,6 +251,52 @@ def load_data(_client):
         
         data['sales'] = pd.concat(sales_list, ignore_index=True) if sales_list else pd.DataFrame()
         
+        # 5. Stock Onhand (NEW)
+        data['stock'] = pd.DataFrame()
+        try:
+            ws_stock = _client.open_by_url(gsheet_url).worksheet("Stock_Onhand")
+            df_stock_raw = pd.DataFrame(ws_stock.get_all_records())
+            df_stock_raw.columns = [col.strip().replace(' ', '_') for col in df_stock_raw.columns]
+            
+            # Mapping kolom
+            stock_cols = {}
+            if 'OLD_Material' in df_stock_raw.columns:
+                stock_cols['OLD_Material'] = 'OLD_Material'
+            if 'Batch_Number' in df_stock_raw.columns:
+                stock_cols['Batch_Number'] = 'Batch_Number'
+            if 'Product_Description' in df_stock_raw.columns:
+                stock_cols['Product_Description'] = 'Product_Description'
+            if 'Expiry_Date' in df_stock_raw.columns:
+                stock_cols['Expiry_Date'] = 'Expiry_Date'
+            if 'Physical_Stock' in df_stock_raw.columns:
+                stock_cols['Physical_Stock'] = 'Physical_Stock'
+            
+            if stock_cols:
+                df_stock = df_stock_raw[list(stock_cols.keys())].copy()
+                df_stock = df_stock.rename(columns=stock_cols)
+                
+                # Convert Physical Stock to numeric
+                df_stock['Physical_Stock'] = pd.to_numeric(df_stock['Physical_Stock'], errors='coerce').fillna(0)
+                
+                # Parse Expiry Date
+                df_stock['Expiry_Date'] = pd.to_datetime(df_stock['Expiry_Date'], errors='coerce', dayfirst=True)
+                
+                # Map OLD_Material ke SKU_ID
+                if 'OLD_Material' in df_stock.columns and 'OLD_Material' in df_product.columns:
+                    sku_mapping = df_product[['OLD_Material', 'SKU_ID']].drop_duplicates()
+                    df_stock = pd.merge(df_stock, sku_mapping, on='OLD_Material', how='left')
+                else:
+                    df_stock['SKU_ID'] = df_stock['OLD_Material']
+                
+                # Filter hanya stok > 0
+                df_stock = df_stock[df_stock['Physical_Stock'] > 0]
+                
+                data['stock'] = df_stock
+                
+        except Exception as e:
+            st.warning(f"⚠️ Gagal load Stock_Onhand: {str(e)}")
+            data['stock'] = pd.DataFrame()
+        
         return data
         
     except Exception as e:
@@ -356,6 +402,93 @@ def calculate_sku_metrics(df_sales, df_po, sku_id, df_product):
     
     return metrics
 
+def calculate_stock_metrics(df_stock, df_product, sku_id, avg_monthly_sales=0):
+    """Hitung metrik stock untuk SKU tertentu (dengan multi-batch)"""
+    stock_metrics = {
+        'total_stock': 0,
+        'batch_count': 0,
+        'expired_stock': 0,
+        'expiring_soon': 0,
+        'expiring_3months': 0,
+        'expiring_6months': 0,
+        'fresh_stock': 0,
+        'batch_details': pd.DataFrame(),
+        'has_stock': False
+    }
+    
+    if df_stock.empty:
+        return stock_metrics
+    
+    # Filter untuk SKU ini
+    sku_stock = df_stock[df_stock['SKU_ID'] == sku_id].copy()
+    
+    if sku_stock.empty:
+        return stock_metrics
+    
+    stock_metrics['has_stock'] = True
+    stock_metrics['total_stock'] = sku_stock['Physical_Stock'].sum()
+    stock_metrics['batch_count'] = len(sku_stock)
+    
+    # Analisis Expiry Date
+    today = datetime.now().date()
+    
+    for _, row in sku_stock.iterrows():
+        expiry = row['Expiry_Date']
+        qty = row['Physical_Stock']
+        
+        if pd.isna(expiry):
+            stock_metrics['fresh_stock'] += qty
+        else:
+            expiry_date = expiry.date() if hasattr(expiry, 'date') else expiry
+            days_to_expiry = (expiry_date - today).days
+            
+            if days_to_expiry < 0:
+                stock_metrics['expired_stock'] += qty
+            elif days_to_expiry <= 30:
+                stock_metrics['expiring_soon'] += qty
+            elif days_to_expiry <= 90:
+                stock_metrics['expiring_3months'] += qty
+            elif days_to_expiry <= 180:
+                stock_metrics['expiring_6months'] += qty
+            else:
+                stock_metrics['fresh_stock'] += qty
+    
+    # Detail batch
+    stock_metrics['batch_details'] = sku_stock[['Batch_Number', 'Physical_Stock', 'Expiry_Date']].copy()
+    stock_metrics['batch_details'] = stock_metrics['batch_details'].sort_values('Expiry_Date')
+    
+    return stock_metrics
+
+def get_stock_health_status(stock_metrics, avg_monthly_sales):
+    """Tentukan status kesehatan stock"""
+    if not stock_metrics['has_stock']:
+        return "⚪ No Stock", "#9CA3AF", "Tidak ada stok tercatat"
+    
+    total_stock = stock_metrics['total_stock']
+    
+    # Cek expired
+    if stock_metrics['expired_stock'] > 0:
+        return "🔴 Expired Stock Detected", "#EF4444", f"{stock_metrics['expired_stock']:,.0f} unit sudah expired"
+    
+    # Cek akan expired
+    if stock_metrics['expiring_soon'] > 0:
+        return "🟠 Expiring Soon (<30 days)", "#F59E0B", f"{stock_metrics['expiring_soon']:,.0f} unit akan expired dalam 30 hari"
+    
+    if stock_metrics['expiring_3months'] > 0:
+        return "🟡 Expiring in 1-3 Months", "#FBBF24", f"{stock_metrics['expiring_3months']:,.0f} unit akan expired dalam 1-3 bulan"
+    
+    # Cek coverage
+    if avg_monthly_sales > 0:
+        cover_months = total_stock / avg_monthly_sales
+        if cover_months < 1:
+            return "🔴 Low Stock", "#EF4444", f"Stok hanya cukup untuk {cover_months:.1f} bulan"
+        elif cover_months > 6:
+            return "🟠 Overstock", "#F59E0B", f"Stok cukup untuk {cover_months:.1f} bulan"
+        else:
+            return "🟢 Healthy Stock", "#10B981", f"Stok cukup untuk {cover_months:.1f} bulan"
+    
+    return "🟢 Stock Available", "#10B981", f"Total stok {total_stock:,.0f} unit"
+
 def get_all_skus_from_data(df_sales, df_po, df_product):
     """Dapatkan semua SKU unik dari Sales, PO, dan Product Master"""
     sku_set = set()
@@ -418,7 +551,6 @@ def prepare_sales_analysis_data(df_sales, df_product):
     if df_sales.empty:
         return pd.DataFrame()
     
-    # Copy dan pastikan SKU_ID sebagai string
     df = df_sales.copy()
     df['SKU_ID'] = df['SKU_ID'].astype(str)
     
@@ -428,11 +560,9 @@ def prepare_sales_analysis_data(df_sales, df_product):
     df['Status'] = 'UNKNOWN'
     df['Floor_Price'] = 0
     
-    # Gabungkan dengan product info jika ada
     if not df_product.empty:
         df_product['SKU_ID'] = df_product['SKU_ID'].astype(str)
         
-        # Pilih kolom yang tersedia di product master
         product_cols = ['SKU_ID']
         if 'Brand' in df_product.columns:
             product_cols.append('Brand')
@@ -444,29 +574,18 @@ def prepare_sales_analysis_data(df_sales, df_product):
             product_cols.append('Floor_Price')
         
         df_product_subset = df_product[product_cols].copy()
-        
-        # Merge
         df = pd.merge(df, df_product_subset, on='SKU_ID', how='left', suffixes=('', '_prod'))
         
-        # Update kolom dari product master jika ada
         if 'Brand_prod' in df.columns:
             df['Brand'] = df['Brand_prod'].fillna('Unknown')
             df = df.drop(columns=['Brand_prod'])
-        elif 'Brand' in df.columns and 'Brand_x' in df.columns:
-            df['Brand'] = df['Brand_y'].fillna('Unknown')
-        
         if 'SKU_Tier_prod' in df.columns:
             df['SKU_Tier'] = df['SKU_Tier_prod'].fillna('Unknown')
-        elif 'SKU_Tier' in df.columns and 'SKU_Tier_x' in df.columns:
-            df['SKU_Tier'] = df['SKU_Tier_y'].fillna('Unknown')
-        
         if 'Status_prod' in df.columns:
             df['Status'] = df['Status_prod'].fillna('UNKNOWN')
-        
         if 'Floor_Price_prod' in df.columns:
             df['Floor_Price'] = df['Floor_Price_prod'].fillna(0)
     
-    # Pastikan kolom yang dibutuhkan ada
     if 'Brand' not in df.columns:
         df['Brand'] = 'Unknown'
     if 'SKU_Tier' not in df.columns:
@@ -476,10 +595,7 @@ def prepare_sales_analysis_data(df_sales, df_product):
     if 'Floor_Price' not in df.columns:
         df['Floor_Price'] = 0
     
-    # Hitung nilai sales (Qty × Floor_Price)
     df['Sales_Value'] = df['Sales_Qty'] * df['Floor_Price']
-    
-    # Tambah kolom waktu
     df['Year'] = df['Month'].dt.year
     df['Month_Num'] = df['Month'].dt.month
     df['Quarter'] = df['Month'].dt.quarter
@@ -488,7 +604,6 @@ def prepare_sales_analysis_data(df_sales, df_product):
     return df
 
 def get_top_brands(df, metric='Sales_Qty', n=10):
-    """Get top brands by sales quantity or value"""
     if df.empty:
         return pd.DataFrame()
     
@@ -503,32 +618,25 @@ def get_top_brands(df, metric='Sales_Qty', n=10):
     return result.sort_values(result.columns[1], ascending=False).head(n)
 
 def calculate_growth_metrics(df):
-    """Calculate MoM and YoY growth metrics"""
     if df.empty:
         return pd.DataFrame()
     
-    # Monthly aggregation
     monthly = df.groupby(df['Month'].dt.to_period('M')).agg({
         'Sales_Qty': 'sum',
         'Sales_Value': 'sum'
     }).reset_index()
     monthly['Month'] = monthly['Month'].dt.to_timestamp()
     monthly = monthly.sort_values('Month')
-    
-    # MoM Growth
     monthly['MoM_Growth_Qty'] = monthly['Sales_Qty'].pct_change() * 100
     monthly['MoM_Growth_Value'] = monthly['Sales_Value'].pct_change() * 100
     
     return monthly
 
 def get_tier_performance(df):
-    """Analisis performa per SKU Tier"""
     if df.empty:
         return pd.DataFrame()
     
-    # Pastikan kolom SKU_Tier ada
     if 'SKU_Tier' not in df.columns:
-        # Buat kolom default jika tidak ada
         df = df.copy()
         df['SKU_Tier'] = 'Unknown'
     
@@ -545,11 +653,9 @@ def get_tier_performance(df):
     return tier_stats.sort_values('Total_Sales_Qty', ascending=False)
 
 def get_status_performance(df):
-    """Analisis performa berdasarkan Status (Active/Inactive)"""
     if df.empty:
         return pd.DataFrame()
     
-    # Pastikan kolom Status ada
     if 'Status' not in df.columns:
         df = df.copy()
         df['Status'] = 'UNKNOWN'
@@ -564,11 +670,9 @@ def get_status_performance(df):
     return status_stats
 
 def calculate_pareto(df, top_percent=80):
-    """Pareto analysis: find SKUs that contribute top X% of sales"""
     if df.empty:
         return pd.DataFrame(), pd.DataFrame()
     
-    # Pastikan kolom yang diperlukan ada
     group_cols = ['SKU_ID']
     if 'Product_Name' in df.columns:
         group_cols.append('Product_Name')
@@ -577,7 +681,6 @@ def calculate_pareto(df, top_percent=80):
     if 'SKU_Tier' in df.columns:
         group_cols.append('SKU_Tier')
     
-    # Group by SKU
     sku_sales = df.groupby(group_cols)['Sales_Qty'].sum().reset_index()
     sku_sales = sku_sales.sort_values('Sales_Qty', ascending=False)
     sku_sales['Cumulative_Qty'] = sku_sales['Sales_Qty'].cumsum()
@@ -587,7 +690,6 @@ def calculate_pareto(df, top_percent=80):
     return pareto_skus, sku_sales
 
 def get_seasonality_pattern(df):
-    """Analisis pola musiman per bulan"""
     if df.empty:
         return pd.DataFrame()
     
@@ -596,29 +698,24 @@ def get_seasonality_pattern(df):
         'Sales_Value': 'mean'
     }).reset_index()
     
-    # Add month names
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     monthly_pattern['Month_Name'] = monthly_pattern['Month_Num'].apply(lambda x: month_names[x-1] if 1 <= x <= 12 else 'Unknown')
     
-    # Calculate seasonal index
     avg_qty = monthly_pattern['Sales_Qty'].mean()
     monthly_pattern['Seasonal_Index'] = monthly_pattern['Sales_Qty'] / avg_qty
     
     return monthly_pattern
 
 def get_brand_growth_matrix(df):
-    """BCG-like matrix: Brand growth vs market share"""
     if df.empty:
         return pd.DataFrame()
     
-    # Get 2025 vs 2026 data (if available)
     df_2025 = df[df['Year'] == 2025].copy() if 2025 in df['Year'].values else pd.DataFrame()
     df_2026 = df[df['Year'] == 2026].copy() if 2026 in df['Year'].values else pd.DataFrame()
     
     brand_stats = []
     
-    # Pastikan kolom Brand ada
     if 'Brand' not in df.columns:
         return pd.DataFrame()
     
@@ -643,11 +740,9 @@ def get_brand_growth_matrix(df):
     if df_brand.empty:
         return pd.DataFrame()
     
-    # Calculate market share and categorize
     total_market = df_brand['Total_Sales'].sum()
     df_brand['Market_Share'] = (df_brand['Total_Sales'] / total_market * 100) if total_market > 0 else 0
     
-    # Categorize
     def categorize(growth, share):
         if growth > 10 and share > 10:
             return "🌟 Star (High Growth, High Share)"
@@ -673,28 +768,28 @@ with st.spinner('🔄 Loading data...'):
     df_product = all_data.get('product', pd.DataFrame())
     df_sales = all_data.get('sales', pd.DataFrame())
     df_po = all_data.get('po', pd.DataFrame())
+    df_stock = all_data.get('stock', pd.DataFrame())
 
 # --- Prepare sales analysis data ---
 df_sales_analysis = prepare_sales_analysis_data(df_sales, df_product)
 
 # --- Create Tabs ---
-tab_sku, tab_sales_analytics = st.tabs([
+tab_sku, tab_sales_analytics, tab_stock = st.tabs([
     "🔍 SKU Evaluator",
-    "📊 Sales Analytics Pro"
+    "📊 Sales Analytics Pro",
+    "📦 Stock Analysis"
 ])
 
 # =============================================================================
-# TAB 1: SKU EVALUATOR (Existing)
+# TAB 1: SKU EVALUATOR
 # =============================================================================
 with tab_sku:
-    # --- Dapatkan semua SKU unik ---
     all_skus = get_all_skus_from_data(df_sales, df_po, df_product)
     
     if not all_skus:
         st.error("❌ Tidak ada data SKU ditemukan.")
         st.stop()
     
-    # --- Control Panel ---
     st.markdown('<div class="control-panel">', unsafe_allow_html=True)
     
     col_sku1, col_sku2, col_chart, col_refresh = st.columns([2, 2, 1.5, 0.8])
@@ -732,14 +827,11 @@ with tab_sku:
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # --- Ambil SKU ID ---
     main_sku = sku_display_map[selected_main_display]
     compare_sku = sku_display_map[selected_compare_display] if selected_compare_display != "[Tidak ada perbandingan]" else None
     
-    # --- Hitung Metrik untuk SKU Utama ---
     main_metrics = calculate_sku_metrics(df_sales, df_po, main_sku, df_product)
     
-    # --- HEADER SKU UTAMA ---
     status_class = "status-active" if main_metrics['status'] == 'ACTIVE' else "status-inactive" if main_metrics['status'] == 'INACTIVE' else "status-notfound"
     status_text = main_metrics['status'] if main_metrics['status'] != 'NOT_FOUND' else "TIDAK ADA DI PRODUCT MASTER"
     
@@ -763,7 +855,7 @@ with tab_sku:
     </div>
     """, unsafe_allow_html=True)
     
-    # --- METRIC CARDS (Collapsible) ---
+    # METRIC CARDS
     with st.expander("📊 Lihat Detail Metrik SKU", expanded=False):
         col1, col2, col3, col4 = st.columns(4)
         
@@ -803,7 +895,74 @@ with tab_sku:
             </div>
             """, unsafe_allow_html=True)
     
-    # --- TREND CHART ---
+    # STOCK METRIC CARDS (NEW)
+    st.markdown("---")
+    st.subheader("📦 Stock Onhand Analysis")
+    
+    stock_metrics = calculate_stock_metrics(df_stock, df_product, main_sku, main_metrics['avg_monthly_sales'])
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    
+    with col_s1:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #3B82F6;">
+            <div class="metric-value">{stock_metrics['total_stock']:,.0f}</div>
+            <div class="metric-label">📦 TOTAL STOCK</div>
+            <div class="metric-sub">{stock_metrics['batch_count']} batch</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_s2:
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: #10B981;">
+            <div class="metric-value">{stock_metrics['fresh_stock']:,.0f}</div>
+            <div class="metric-label">✅ FRESH STOCK</div>
+            <div class="metric-sub">> 6 bulan</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_s3:
+        warning_stock = stock_metrics['expiring_soon'] + stock_metrics['expiring_3months'] + stock_metrics['expiring_6months']
+        color = "#EF4444" if stock_metrics['expiring_soon'] > 0 else "#F59E0B" if stock_metrics['expiring_3months'] > 0 else "#6B7280"
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: {color};">
+            <div class="metric-value">{warning_stock:,.0f}</div>
+            <div class="metric-label">⚠️ EXPIRING SOON</div>
+            <div class="metric-sub">≤ 6 bulan</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_s4:
+        health_status, health_color, health_desc = get_stock_health_status(stock_metrics, main_metrics['avg_monthly_sales'])
+        st.markdown(f"""
+        <div class="metric-card" style="border-top-color: {health_color};">
+            <div class="metric-value" style="font-size: 1rem;">{health_status}</div>
+            <div class="metric-label">🏥 STOCK HEALTH</div>
+            <div class="metric-sub">{health_desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    if stock_metrics['has_stock'] and not stock_metrics['batch_details'].empty:
+        with st.expander("📋 Lihat Detail Batch per SKU", expanded=False):
+            batch_df = stock_metrics['batch_details'].copy()
+            batch_df['Expiry_Date'] = batch_df['Expiry_Date'].dt.strftime('%d %b %Y') if not batch_df['Expiry_Date'].isna().all() else 'N/A'
+            batch_df = batch_df.rename(columns={
+                'Batch_Number': 'Batch Number',
+                'Physical_Stock': 'Stock Qty',
+                'Expiry_Date': 'Expiry Date'
+            })
+            st.dataframe(batch_df, use_container_width=True, hide_index=True)
+            
+            if stock_metrics['expired_stock'] > 0:
+                st.error(f"⚠️ Terdapat {stock_metrics['expired_stock']:,.0f} unit stok yang sudah EXPIRED! Segera lakukan disposisi.")
+            elif stock_metrics['expiring_soon'] > 0:
+                st.warning(f"⚠️ Terdapat {stock_metrics['expiring_soon']:,.0f} unit stok yang akan EXPIRED dalam 30 hari.")
+            elif stock_metrics['expiring_3months'] > 0:
+                st.info(f"ℹ️ Terdapat {stock_metrics['expiring_3months']:,.0f} unit stok yang akan EXPIRED dalam 1-3 bulan.")
+    else:
+        st.info("📦 Tidak ada data stok untuk SKU ini")
+    
+    # TREND CHART
     st.markdown("---")
     st.subheader("📈 Tren Sales vs Purchase Order")
     
@@ -906,7 +1065,7 @@ with tab_sku:
     else:
         st.info("📊 Tidak ada data Sales atau PO untuk SKU ini")
     
-    # --- SMART DIAGNOSTICS ---
+    # SMART DIAGNOSTICS
     st.markdown("---")
     st.subheader("🩺 Smart Diagnostics & Rekomendasi")
     
@@ -972,7 +1131,7 @@ with tab_sku:
             </div>
             """, unsafe_allow_html=True)
     
-    # --- FINANCIAL SUMMARY ---
+    # FINANCIAL SUMMARY
     st.markdown("---")
     st.subheader("💰 Financial Summary")
     
@@ -1019,7 +1178,7 @@ with tab_sku:
     if main_metrics['floor_price'] == 0 or main_metrics['purchase_price'] == 0:
         st.warning("⚠️ Harga (Floor_Price atau Purchase_Order_Price) = 0. Periksa data Product Master.")
     
-    # --- DETAIL DATA PER BULAN ---
+    # DETAIL DATA PER BULAN
     with st.expander("📋 Lihat Detail Data per Bulan", expanded=False):
         if not main_df.empty:
             detail_df = main_df.copy()
@@ -1052,7 +1211,6 @@ with tab_sales_analytics:
     if df_sales_analysis.empty:
         st.warning("⚠️ Tidak ada data sales untuk dianalisis.")
     else:
-        # --- PERIODE FILTER ---
         available_years = sorted(df_sales_analysis['Year'].unique())
         selected_years = st.multiselect("📅 Filter Tahun", available_years, default=available_years, key="sales_analytics_year")
         
@@ -1061,9 +1219,7 @@ with tab_sales_analytics:
         if df_filtered.empty:
             st.warning("Tidak ada data untuk periode yang dipilih.")
         else:
-            # =========================================================================
-            # ROW 1: EXECUTIVE SUMMARY CARDS
-            # =========================================================================
+            # Executive Summary
             st.markdown("### 🎯 Executive Summary")
             
             total_qty = df_filtered['Sales_Qty'].sum()
@@ -1082,16 +1238,13 @@ with tab_sales_analytics:
             with col_s4:
                 st.metric("Active Brand", f"{unique_brands:,}")
             
-            # =========================================================================
-            # ROW 2: TOP BRANDS & MARKET SHARE
-            # =========================================================================
+            # Top Brands
             st.markdown("---")
             st.markdown("### 🏆 Top Brands Performance")
             
             col_b1, col_b2 = st.columns(2)
             
             with col_b1:
-                # Top Brands by Quantity
                 top_brands_qty = get_top_brands(df_filtered, 'Sales_Qty', 10)
                 fig_top_brands_qty = px.bar(
                     top_brands_qty, x='Brand', y='Total_Sales_Qty',
@@ -1105,7 +1258,6 @@ with tab_sales_analytics:
                 st.plotly_chart(fig_top_brands_qty, use_container_width=True)
             
             with col_b2:
-                # Top Brands by Value
                 top_brands_value = get_top_brands(df_filtered, 'Sales_Value', 10)
                 fig_top_brands_value = px.bar(
                     top_brands_value, x='Brand', y='Total_Sales_Value',
@@ -1118,7 +1270,7 @@ with tab_sales_analytics:
                 fig_top_brands_value.update_layout(height=400, xaxis_tickangle=-45)
                 st.plotly_chart(fig_top_brands_value, use_container_width=True)
             
-            # Market Share Donut
+            # Market Share
             st.markdown("#### 📊 Market Share Distribution")
             col_ms1, col_ms2 = st.columns(2)
             
@@ -1146,9 +1298,7 @@ with tab_sales_analytics:
                 fig_donut_value.update_layout(height=400)
                 st.plotly_chart(fig_donut_value, use_container_width=True)
             
-            # =========================================================================
-            # ROW 3: TIER & STATUS ANALYSIS
-            # =========================================================================
+            # Tier & Status
             st.markdown("---")
             st.markdown("### 💎 SKU Tier & Status Analysis")
             
@@ -1168,7 +1318,6 @@ with tab_sales_analytics:
                     fig_tier.update_layout(height=350)
                     st.plotly_chart(fig_tier, use_container_width=True)
                     
-                    # Tier summary table
                     st.dataframe(
                         tier_performance[['SKU_Tier', 'SKU_Count', 'Total_Sales_Qty', 'Avg_Qty_per_SKU', 'Share_Qty']],
                         column_config={
@@ -1192,12 +1341,9 @@ with tab_sales_analytics:
                     fig_status.update_layout(height=350)
                     st.plotly_chart(fig_status, use_container_width=True)
                     
-                    # Status summary
                     st.dataframe(status_performance, use_container_width=True, hide_index=True)
             
-            # =========================================================================
-            # ROW 4: GROWTH MATRIX (BCG-like)
-            # =========================================================================
+            # Growth Matrix
             st.markdown("---")
             st.markdown("### 📈 Growth Matrix (Brand Performance)")
             
@@ -1222,21 +1368,17 @@ with tab_sales_analytics:
                 fig_growth.update_layout(height=500, xaxis_range=[0, brand_growth['Market_Share'].max() * 1.1])
                 st.plotly_chart(fig_growth, use_container_width=True)
                 
-                # Insight
                 st.info("💡 **Insight:** Star brands are your growth engines. Question Marks need investment. Cash Cows fund operations. Dogs need evaluation.")
             else:
                 st.info("Data tidak cukup untuk analisis growth (butuh data 2025 & 2026).")
             
-            # =========================================================================
-            # ROW 5: SEASONALITY & MONTHLY TREND
-            # =========================================================================
+            # Seasonality
             st.markdown("---")
             st.markdown("### 🌙 Seasonality & Monthly Pattern")
             
             col_szn1, col_szn2 = st.columns(2)
             
             with col_szn1:
-                # Monthly trend
                 monthly_trend = df_filtered.groupby(df_filtered['Month'].dt.to_period('M'))['Sales_Qty'].sum().reset_index()
                 monthly_trend['Month'] = monthly_trend['Month'].dt.to_timestamp()
                 monthly_trend['Month_Label'] = monthly_trend['Month'].dt.strftime('%b %Y')
@@ -1252,7 +1394,6 @@ with tab_sales_analytics:
                 st.plotly_chart(fig_monthly, use_container_width=True)
             
             with col_szn2:
-                # Seasonality pattern
                 seasonality = get_seasonality_pattern(df_filtered)
                 if not seasonality.empty:
                     fig_season = px.bar(
@@ -1268,14 +1409,11 @@ with tab_sales_analytics:
                     fig_season.update_layout(height=350)
                     st.plotly_chart(fig_season, use_container_width=True)
                     
-                    # Highlight peak and low months
                     peak_month = seasonality.loc[seasonality['Seasonal_Index'].idxmax(), 'Month_Name']
                     low_month = seasonality.loc[seasonality['Seasonal_Index'].idxmin(), 'Month_Name']
                     st.caption(f"📊 **Peak Season:** {peak_month} | **Low Season:** {low_month}")
             
-            # =========================================================================
-            # ROW 6: PARETO ANALYSIS (80/20 RULE)
-            # =========================================================================
+            # Pareto Analysis
             st.markdown("---")
             st.markdown("### 🎯 Pareto Analysis (80/20 Rule)")
             
@@ -1286,7 +1424,6 @@ with tab_sales_analytics:
             with col_p1:
                 fig_pareto = go.Figure()
                 
-                # Bar chart for SKU sales
                 top_20 = all_skus_pareto.head(20)
                 fig_pareto.add_trace(go.Bar(
                     x=top_20['SKU_ID'].astype(str),
@@ -1297,7 +1434,6 @@ with tab_sales_analytics:
                     textposition='outside'
                 ))
                 
-                # Line for cumulative percentage
                 fig_pareto.add_trace(go.Scatter(
                     x=top_20['SKU_ID'].astype(str),
                     y=top_20['Cumulative_Percent'],
@@ -1335,9 +1471,7 @@ with tab_sales_analytics:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Show pareto SKUs
                 with st.expander("📋 Lihat Daftar SKU Pareto (80%)"):
-                    # Pilih kolom yang tersedia
                     display_cols = []
                     if 'SKU_ID' in pareto_80.columns:
                         display_cols.append('SKU_ID')
@@ -1359,9 +1493,7 @@ with tab_sales_analytics:
                         hide_index=True
                     )
             
-            # =========================================================================
-            # ROW 7: MoM GROWTH TREND
-            # =========================================================================
+            # MoM Growth
             st.markdown("---")
             st.markdown("### 📉 Month-over-Month Growth Analysis")
             
@@ -1388,16 +1520,174 @@ with tab_sales_analytics:
                 )
                 st.plotly_chart(fig_mom, use_container_width=True)
                 
-                # Average growth
                 avg_growth = growth_metrics['MoM_Growth_Qty'].mean()
                 st.caption(f"📈 **Average MoM Growth:** {avg_growth:+.1f}%")
             
-            # =========================================================================
-            # ROW 8: DATA EXPLORER
-            # =========================================================================
+            # Data Explorer
             st.markdown("---")
             with st.expander("📋 Data Explorer - Raw Sales Data", expanded=False):
                 st.dataframe(df_filtered, use_container_width=True, height=400)
+
+# =============================================================================
+# TAB 3: STOCK ANALYSIS
+# =============================================================================
+with tab_stock:
+    st.subheader("📦 Stock Onhand Analysis")
+    st.caption("Analisis stok multi-batch: Expiry Date monitoring & Stock Health")
+    
+    if df_stock.empty:
+        st.warning("⚠️ Tidak ada data stok yang tersedia.")
+    else:
+        # Filter SKU
+        all_stock_skus = sorted(df_stock['SKU_ID'].dropna().unique())
+        
+        col_filter1, col_filter2 = st.columns([2, 1])
+        
+        with col_filter1:
+            selected_stock_sku = st.selectbox("🔍 Pilih SKU untuk Analisis Stok", all_stock_skus, key="stock_sku")
+        
+        with col_filter2:
+            if st.button("🔄 Refresh Stock Data", use_container_width=True):
+                st.cache_data.clear()
+                st.rerun()
+        
+        # Get product info
+        product_info = df_product[df_product['SKU_ID'] == selected_stock_sku]
+        product_name = product_info.iloc[0].get('Product_Name', selected_stock_sku) if not product_info.empty else selected_stock_sku
+        brand = product_info.iloc[0].get('Brand', '-') if not product_info.empty else '-'
+        
+        st.markdown(f"""
+        <div class="sku-header" style="background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);">
+            <div>
+                <div class="sku-title">{product_name} <span style="font-size:0.8rem;">({selected_stock_sku})</span></div>
+                <div class="sku-badges">
+                    <span class="badge">🏷️ {brand}</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Get stock metrics
+        stock_metrics = calculate_stock_metrics(df_stock, df_product, selected_stock_sku, 0)
+        
+        if stock_metrics['has_stock']:
+            # Stock Summary Cards
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Total Stock", f"{stock_metrics['total_stock']:,.0f}", 
+                          delta=f"{stock_metrics['batch_count']} batch")
+            
+            with col2:
+                st.metric("Fresh Stock (>6 bln)", f"{stock_metrics['fresh_stock']:,.0f}")
+            
+            with col3:
+                st.metric("Expiring ≤6 bln", f"{stock_metrics['expiring_6months'] + stock_metrics['expiring_3months'] + stock_metrics['expiring_soon']:,.0f}")
+            
+            with col4:
+                expired_total = stock_metrics['expired_stock']
+                st.metric("Expired Stock", f"{expired_total:,.0f}", 
+                          delta="⚠️ PERLU DISPOSISI" if expired_total > 0 else None,
+                          delta_color="inverse" if expired_total > 0 else "normal")
+            
+            # Expiry Distribution Chart
+            st.markdown("---")
+            st.subheader("📊 Expiry Date Distribution")
+            
+            expiry_data = []
+            if stock_metrics['expired_stock'] > 0:
+                expiry_data.append({'Category': 'Expired (< 0 days)', 'Qty': stock_metrics['expired_stock']})
+            if stock_metrics['expiring_soon'] > 0:
+                expiry_data.append({'Category': 'Expiring Soon (0-30 days)', 'Qty': stock_metrics['expiring_soon']})
+            if stock_metrics['expiring_3months'] > 0:
+                expiry_data.append({'Category': 'Expiring in 1-3 months', 'Qty': stock_metrics['expiring_3months']})
+            if stock_metrics['expiring_6months'] > 0:
+                expiry_data.append({'Category': 'Expiring in 3-6 months', 'Qty': stock_metrics['expiring_6months']})
+            if stock_metrics['fresh_stock'] > 0:
+                expiry_data.append({'Category': 'Fresh (> 6 months)', 'Qty': stock_metrics['fresh_stock']})
+            
+            if expiry_data:
+                expiry_df = pd.DataFrame(expiry_data)
+                color_map = {
+                    'Expired (< 0 days)': '#EF4444',
+                    'Expiring Soon (0-30 days)': '#F59E0B',
+                    'Expiring in 1-3 months': '#FBBF24',
+                    'Expiring in 3-6 months': '#60A5FA',
+                    'Fresh (> 6 months)': '#10B981'
+                }
+                fig_expiry = px.pie(
+                    expiry_df, values='Qty', names='Category',
+                    title='Stock Distribution by Expiry Status',
+                    hole=0.4,
+                    color='Category',
+                    color_discrete_map=color_map
+                )
+                fig_expiry.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_expiry, use_container_width=True)
+            
+            # Batch Details Table
+            st.markdown("---")
+            st.subheader("📋 Batch Details")
+            
+            batch_df = stock_metrics['batch_details'].copy()
+            batch_df['Expiry_Date'] = batch_df['Expiry_Date'].dt.strftime('%d %b %Y')
+            batch_df = batch_df.rename(columns={
+                'Batch_Number': 'Batch Number',
+                'Physical_Stock': 'Stock Qty',
+                'Expiry_Date': 'Expiry Date'
+            })
+            
+            # Add warning indicators
+            today = datetime.now().date()
+            def get_expiry_warning(expiry_str):
+                if expiry_str == 'N/A' or pd.isna(expiry_str):
+                    return "⚪"
+                try:
+                    expiry_date = datetime.strptime(expiry_str, '%d %b %Y').date()
+                    days = (expiry_date - today).days
+                    if days < 0:
+                        return "🔴 EXPIRED"
+                    elif days <= 30:
+                        return "🟠 CRITICAL"
+                    elif days <= 90:
+                        return "🟡 WARNING"
+                    else:
+                        return "🟢 OK"
+                except:
+                    return "⚪"
+            
+            batch_df['Status'] = batch_df['Expiry Date'].apply(get_expiry_warning)
+            
+            # Reorder columns
+            batch_df = batch_df[['Batch Number', 'Stock Qty', 'Expiry Date', 'Status']]
+            
+            st.dataframe(batch_df, use_container_width=True, hide_index=True)
+            
+            # Alerts
+            st.markdown("---")
+            if stock_metrics['expired_stock'] > 0:
+                st.error(f"""
+                🚨 **URGENT - EXPIRED STOCK DETECTED!**
+                - Total expired: {stock_metrics['expired_stock']:,.0f} unit
+                - **Action Required:** Segera lakukan disposisi dan pisahkan dari stok baik.
+                """)
+            
+            if stock_metrics['expiring_soon'] > 0:
+                st.warning(f"""
+                ⚠️ **EXPIRING SOON (< 30 DAYS)**
+                - Total akan expired: {stock_metrics['expiring_soon']:,.0f} unit
+                - **Recommendation:** Prioritaskan penjualan atau diskon untuk batch ini.
+                """)
+            
+            if stock_metrics['expiring_3months'] > 0:
+                st.info(f"""
+                ℹ️ **EXPIRING IN 1-3 MONTHS**
+                - Total akan expired: {stock_metrics['expiring_3months']:,.0f} unit
+                - **Recommendation:** Mulai rencanakan促销 atau bundling untuk mempercepat pergerakan stok.
+                """)
+                
+        else:
+            st.info(f"📦 Tidak ada data stok untuk SKU {selected_stock_sku}")
 
 # =============================================================================
 # FOOTER
@@ -1405,6 +1695,6 @@ with tab_sales_analytics:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #888; font-size: 0.7rem; padding: 0.5rem;">
-    <p>📊 SKU 360° Evaluator Pro | Data Sales 2025-2026 | Data PO hingga Mar 2026 | Support Perbandingan 2 SKU | Sales Analytics Pro</p>
+    <p>📊 SKU 360° Evaluator Pro | Data Sales 2025-2026 | Data PO hingga Mar 2026 | Multi-batch Stock Management | Sales Analytics Pro</p>
 </div>
 """, unsafe_allow_html=True)
