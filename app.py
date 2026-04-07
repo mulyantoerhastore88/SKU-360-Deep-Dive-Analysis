@@ -1326,7 +1326,8 @@ with tab_sku:
     # Hitung total berdasarkan filter
     main_filtered_totals = get_filtered_totals(main_metrics, filter_start, filter_end)
     
-    col_qty1, col_qty2, col_qty3, col_qty4 = st.columns(4)
+    # PERBAIKAN: Ubah menjadi 5 kolom agar Sell-Through Rate mendapat tempat khusus
+    col_qty1, col_qty2, col_qty3, col_qty4, col_qty5 = st.columns(5)
     
     if display_type == "📦 Quantity":
         with col_qty1:
@@ -1339,17 +1340,29 @@ with tab_sku:
         
         with col_qty3:
             st.metric("📥 TOTAL INBOUND", f"{main_filtered_totals['total_inbound']:,.0f}",
-                      help=f"Total unit sudah masuk periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
+                      help=f"Total unit sudah masuk gudang periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
         
         with col_qty4:
-            inbound_rate = (main_filtered_totals['total_inbound'] / main_filtered_totals['total_po'] * 100) if main_filtered_totals['total_po'] > 0 else 0
-            rate_color = "normal" if inbound_rate >= 90 else "inverse" # Merah jika supplier ngirim di bawah 90%
+            inbound_gap = main_filtered_totals['total_inbound'] - main_filtered_totals['total_sales']
+            gap_color = "normal" if inbound_gap >= 0 else "inverse"
+            st.metric("⚖️ UNSOLD STOCK (GAP)", f"{inbound_gap:+,.0f}",
+                      help="Selisih antara barang yang sudah masuk gudang dengan yang terjual (Sisa Stok Inbound)")
             
-            st.metric("🚚 INBOUND FULFILLMENT", f"{inbound_rate:.1f}%",
-                      help="Persentase PO yang sudah berhasil masuk menjadi Inbound",
-                      delta=f"Target: 100%",
+        with col_qty5:
+            # Hitung Persentase Sales vs Inbound (Sell-Through Rate)
+            if main_filtered_totals['total_inbound'] > 0:
+                sell_through_pct = (main_filtered_totals['total_sales'] / main_filtered_totals['total_inbound']) * 100
+            else:
+                sell_through_pct = 0
+                
+            rate_color = "normal" if sell_through_pct >= 70 else "inverse" # Merah jika di bawah 70%
+            
+            st.metric("🎯 SALES vs INBOUND", f"{sell_through_pct:.1f}%",
+                      help="Sell-Through Rate: Persentase barang terjual dibandingkan dengan total barang yang sudah masuk gudang",
+                      delta="Target: >70%",
                       delta_color=rate_color)
-    else:
+                      
+    else: # Mode Revenue
         with col_qty1:
             st.metric("💰 TOTAL SALES VALUE", format_rupiah(main_filtered_totals['total_sales_value']),
                       help=f"Total nilai penjualan periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
@@ -1364,10 +1377,22 @@ with tab_sku:
         
         with col_qty4:
             inbound_gap_value = main_filtered_totals['total_inbound_value'] - main_filtered_totals['total_sales_value']
-            gap_color = "normal" if inbound_gap_value >= 0 else "inverse"
-            st.metric("⚖️ GAP VALUE", format_rupiah(inbound_gap_value),
-                      delta=f"{inbound_gap_value/main_filtered_totals['total_sales_value']*100:.1f}% dari Sales" if main_filtered_totals['total_sales_value'] > 0 else None,
-                      delta_color=gap_color)
+            st.metric("⚖️ TRAPPED CAPITAL (GAP)", format_rupiah(inbound_gap_value),
+                      help="Nilai modal yang masih tertahan di gudang (Inbound Value - Sales Value)")
+                      
+        with col_qty5:
+            # Hitung Persentase Sales Value vs Inbound Value
+            if main_filtered_totals['total_inbound_value'] > 0:
+                sell_through_val_pct = (main_filtered_totals['total_sales_value'] / main_filtered_totals['total_inbound_value']) * 100
+            else:
+                sell_through_val_pct = 0
+                
+            rate_color = "normal" if sell_through_val_pct >= 70 else "inverse"
+            
+            st.metric("🎯 SALES vs INBOUND", f"{sell_through_val_pct:.1f}%",
+                      help="Return on Inbound: Persentase nilai yang sudah kembali dari total nilai barang masuk",
+                      delta="Target: >70%",
+                      delta_color=rate_color)
     
     # Tampilkan informasi periode yang sedang ditampilkan
     if filter_start and filter_end:
