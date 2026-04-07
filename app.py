@@ -517,17 +517,21 @@ def get_all_skus_from_data(df_sales, df_po, df_po_delivered, df_product):
     """Dapatkan semua SKU unik dari Sales, PO, PO Delivered, dan Product Master"""
     sku_set = set()
     
+    # Tambahkan dari Product Master (prioritas utama)
+    if not df_product.empty:
+        sku_set.update(df_product['SKU_ID'].dropna().unique())
+    
+    # Tambahkan dari Sales
     if not df_sales.empty:
         sku_set.update(df_sales['SKU_ID'].dropna().unique())
     
+    # Tambahkan dari PO
     if not df_po.empty:
         sku_set.update(df_po['SKU_ID'].dropna().unique())
     
+    # Tambahkan dari PO Delivered
     if not df_po_delivered.empty:
         sku_set.update(df_po_delivered['SKU_ID'].dropna().unique())
-    
-    if not df_product.empty:
-        sku_set.update(df_product['SKU_ID'].dropna().unique())
     
     sku_set = {s for s in sku_set if pd.notna(s) and str(s).strip() != ''}
     return sorted(list(sku_set))
@@ -814,6 +818,20 @@ with st.spinner('🔄 Loading data...'):
     df_po = all_data.get('po', pd.DataFrame())
     df_po_delivered = all_data.get('po_delivered', pd.DataFrame())
     df_stock = all_data.get('stock', pd.DataFrame())
+    # DEBUG: Cek SKU yang tersedia
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔍 Debug Info")
+    with st.sidebar.expander("Lihat Sample SKU dari masing-masing source"):
+        if not df_product.empty:
+            st.sidebar.write(f"Product Master: {df_product['SKU_ID'].nunique()} SKU")
+            st.sidebar.write(df_product['SKU_ID'].head(5).tolist())
+        if not df_sales.empty:
+            st.sidebar.write(f"Sales: {df_sales['SKU_ID'].nunique()} SKU")
+            st.sidebar.write(df_sales['SKU_ID'].head(5).tolist())
+        if not df_po.empty:
+            st.sidebar.write(f"PO: {df_po['SKU_ID'].nunique()} SKU")
+            st.sidebar.write(df_po['SKU_ID'].head(5).tolist())
+
 
 # --- Prepare sales analysis data ---
 df_sales_analysis = prepare_sales_analysis_data(df_sales, df_product)
