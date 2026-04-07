@@ -763,23 +763,30 @@ def get_brand_growth_matrix(df):
     df_2026 = df[df['Year'] == 2026].copy() if 2026 in df['Year'].values else pd.DataFrame()
     
     brand_stats = []
-    
     if 'Brand' not in df.columns:
         return pd.DataFrame()
     
     brands = df['Brand'].unique()
     
+    # Hitung jumlah bulan aktif di masing-masing tahun agar perbandingannya adil
+    months_2025 = df_2025['Month'].nunique() if not df_2025.empty else 1
+    months_2026 = df_2026['Month'].nunique() if not df_2026.empty else 1
+    
     for brand in brands:
         sales_2025 = df_2025[df_2025['Brand'] == brand]['Sales_Qty'].sum() if not df_2025.empty else 0
         sales_2026 = df_2026[df_2026['Brand'] == brand]['Sales_Qty'].sum() if not df_2026.empty else 0
         
-        growth = ((sales_2026 - sales_2025) / sales_2025 * 100) if sales_2025 > 0 else 0
+        # PERBAIKAN: Gunakan Rata-rata Bulanan (Run-Rate) untuk menghitung Growth
+        avg_sales_2025 = sales_2025 / months_2025 if months_2025 > 0 else 0
+        avg_sales_2026 = sales_2026 / months_2026 if months_2026 > 0 else 0
+        
+        growth = ((avg_sales_2026 - avg_sales_2025) / avg_sales_2025 * 100) if avg_sales_2025 > 0 else 0
         total_sales = sales_2025 + sales_2026
         
         brand_stats.append({
             'Brand': brand,
-            'Sales_2025': sales_2025,
-            'Sales_2026': sales_2026,
+            'Avg_Monthly_2025': avg_sales_2025,
+            'Avg_Monthly_2026': avg_sales_2026,
             'Growth_2026': growth,
             'Total_Sales': total_sales
         })
@@ -853,16 +860,29 @@ with tab_sku:
         st.error("❌ Tidak ada data SKU ditemukan.")
         st.stop()
     
-    # --- Control Panel ---
+    # --- Control Panel (Cascading Filter) ---
     st.markdown('<div class="control-panel">', unsafe_allow_html=True)
     
-    col_sku1, col_sku2, col_refresh = st.columns([2.5, 2.5, 0.8])
+    col_brand, col_sku1, col_sku2, col_refresh = st.columns([1.5, 2.5, 2.5, 0.8])
+    
+    with col_brand:
+        st.markdown('<div class="control-label">🏢 PILIH BRAND</div>', unsafe_allow_html=True)
+        # Ambil list brand yang ada
+        all_brands_filter = sorted(df_product['Brand'].dropna().unique().tolist())
+        selected_brand_filter = st.selectbox("Filter Brand", ["Semua Brand"] + all_brands_filter, label_visibility="collapsed")
     
     with col_sku1:
         st.markdown('<div class="control-label">📦 SKU UTAMA (Referensi)</div>', unsafe_allow_html=True)
         sku_display_map = {}
         sku_display_list = []
-        for sku in all_skus:
+        
+        # Filter SKU berdasarkan Brand yang dipilih
+        filtered_skus = all_skus
+        if selected_brand_filter != "Semua Brand":
+            brand_skus = df_product[df_product['Brand'] == selected_brand_filter]['SKU_ID'].tolist()
+            filtered_skus = [s for s in all_skus if s in brand_skus]
+            
+        for sku in filtered_skus:
             product_row = df_product[df_product['SKU_ID'] == sku]
             if not product_row.empty:
                 product_name = product_row.iloc[0].get('Product_Name', '')
@@ -872,12 +892,12 @@ with tab_sku:
             sku_display_map[display] = sku
             sku_display_list.append(display)
         
-        selected_main_display = st.selectbox("SKU Utama", sku_display_list, key="main_sku")
+        selected_main_display = st.selectbox("SKU Utama", sku_display_list, key="main_sku", label_visibility="collapsed")
     
     with col_sku2:
-        st.markdown('<div class="control-label">🔄 SKU PEMBANDING (Opsional)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="control-label">🔄 SKU PEMBANDING</div>', unsafe_allow_html=True)
         compare_options = ["[Tidak ada perbandingan]"] + sku_display_list
-        selected_compare_display = st.selectbox("SKU Pembanding", compare_options, key="compare_sku")
+        selected_compare_display = st.selectbox("SKU Pembanding", compare_options, key="compare_sku", label_visibility="collapsed")
     
     with col_refresh:
         st.markdown('<div class="control-label" style="opacity:0;">Refresh</div>', unsafe_allow_html=True)
@@ -1322,11 +1342,13 @@ with tab_sku:
                       help=f"Total unit sudah masuk periode {filter_start.strftime('%b %Y') if filter_start else 'awal'} - {filter_end.strftime('%b %Y') if filter_end else 'akhir'}")
         
         with col_qty4:
-            inbound_gap = main_filtered_totals['total_inbound'] - main_filtered_totals['total_sales']
-            gap_color = "normal" if inbound_gap >= 0 else "inverse"
-            st.metric("⚖️ GAP (Inbound - Sales)", f"{inbound_gap:+,.0f}",
-                      delta=f"{inbound_gap/main_filtered_totals['total_sales']*100:.1f}% dari Sales" if main_filtered_totals['total_sales'] > 0 else None,
-                      delta_color=gap_color)
+            inbound_rate = (main_filtered_totals['total_inbound'] / main_filtered_totals['total_po'] * 100) if main_filtered_totals['total_po'] > 0 else 0
+            rate_color = "normal" if inbound_rate >= 90 else "inverse" # Merah jika supplier ngirim di bawah 90%
+            
+            st.metric("🚚 INBOUND FULFILLMENT", f"{inbound_rate:.1f}%",
+                      help="Persentase PO yang sudah berhasil masuk menjadi Inbound",
+                      delta=f"Target: 100%",
+                      delta_color=rate_color)
     else:
         with col_qty1:
             st.metric("💰 TOTAL SALES VALUE", format_rupiah(main_filtered_totals['total_sales_value']),
@@ -1494,24 +1516,26 @@ with tab_sales_analytics:
             st.markdown("---")
             st.markdown(f"### 📊 Multi-Brand Sales Comparison ({display_metric})")
             
-            # Aggregate per brand per month (urutkan berdasarkan waktu)
+            # Aggregate per brand per month
             brand_monthly = df_filtered.groupby(['Brand', df_filtered['Month'].dt.to_period('M')]).agg({
                 'Sales_Qty': 'sum',
                 'Sales_Value': 'sum'
             }).reset_index()
             brand_monthly['Month'] = brand_monthly['Month'].dt.to_timestamp()
             
-            # Urutkan berdasarkan Month (waktu) ASCENDING
-            brand_monthly = brand_monthly.sort_values('Month')
-            brand_monthly['Month_Label'] = brand_monthly['Month'].dt.strftime('%b %Y')
-            
-            # Pivot untuk chart
+            # PERBAIKAN: Pivot menggunakan 'Month' (tipe Datetime) agar urutan waktu tidak rusak!
             if display_metric == "Quantity":
-                pivot_data = brand_monthly.pivot(index='Month_Label', columns='Brand', values='Sales_Qty').fillna(0)
+                pivot_data = brand_monthly.pivot(index='Month', columns='Brand', values='Sales_Qty').fillna(0)
                 y_title = "Sales Quantity"
             else:
-                pivot_data = brand_monthly.pivot(index='Month_Label', columns='Brand', values='Sales_Value').fillna(0)
+                pivot_data = brand_monthly.pivot(index='Month', columns='Brand', values='Sales_Value').fillna(0)
                 y_title = "Sales Value (Rp)"
+            
+            # 1. Pastikan terurut secara kronologis (waktu) terlebih dahulu
+            pivot_data = pivot_data.sort_index()
+            
+            # 2. Setelah terurut, baru ubah index-nya menjadi label teks untuk tampilan Chart
+            pivot_data.index = pivot_data.index.strftime('%b %Y')
             
             # Buat Bar Chart
             fig_brand_comp = go.Figure()
@@ -1538,6 +1562,9 @@ with tab_sales_analytics:
                 legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
                 margin=dict(t=50, b=40)
             )
+            
+            # 3. KUNCI UTAMA: Paksa Plotly memakai urutan array asli (jangan diurutkan abjad lagi)
+            fig_brand_comp.update_xaxes(categoryorder='array', categoryarray=pivot_data.index)
             
             st.plotly_chart(fig_brand_comp, use_container_width=True)
             
@@ -1746,6 +1773,8 @@ with tab_sales_analytics:
                 )
                 fig_monthly.update_traces(line=dict(color='#6366F1', width=2.5), marker=dict(size=6))
                 fig_monthly.update_layout(height=350, xaxis_tickangle=-45)
+                # Tambahkan baris ini agar urutan bulannya terkunci:
+                fig_monthly.update_xaxes(categoryorder='array', categoryarray=monthly_trend['Month_Label'])
                 st.plotly_chart(fig_monthly, use_container_width=True)
             
             with col_szn2:
