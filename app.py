@@ -1321,7 +1321,7 @@ with st.sidebar:
     st.markdown("---")
     
     # ===== TOMBOL REFRESH DATA (SATU-SATUNYA) =====
-    if st.button("🔄 REFRESH DATA DARI GSHEET", use_container_width=True, type="primary"):
+    if st.button("🔄 REFRESH DATA", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.cache_resource.clear()
         st.toast("✅ Data sedang diperbarui dari Google Sheets...", icon="🔄")
