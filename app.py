@@ -494,7 +494,7 @@ def prepare_chart_data(sku_id, metrics):
 # ECHARTS VISUALIZATION FUNCTIONS
 # =============================================================================
 
-def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sku=""):
+ddef create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sku=""):
     """Create ECharts trend chart with Sales & Inbound as Bar, PO as Line"""
     
     if main_df.empty:
@@ -502,13 +502,18 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
     
     months = main_df['Month_Label'].tolist()
     
+    # PERBAIKAN: Fungsi helper untuk membersihkan NaN
+    def clean_data(series):
+        return [0 if pd.isna(x) else int(x) for x in series]
+    
     series = []
     
     # Main SKU - Sales (Bar)
+    sales_data = clean_data(main_df['Sales'])
     series.append({
         "name": f"{main_sku} - Sales",
         "type": "bar",
-        "data": main_df['Sales'].tolist(),
+        "data": sales_data,
         "itemStyle": {"color": "#10B981", "borderRadius": [4, 4, 0, 0]},
         "barWidth": "30%",
         "label": {
@@ -519,10 +524,11 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
     })
     
     # Main SKU - Inbound (Bar)
+    inbound_data = clean_data(main_df['PO_Delivered'])
     series.append({
         "name": f"{main_sku} - Inbound",
         "type": "bar",
-        "data": main_df['PO_Delivered'].tolist(),
+        "data": inbound_data,
         "itemStyle": {"color": "#3B82F6", "borderRadius": [4, 4, 0, 0]},
         "barWidth": "30%",
         "label": {
@@ -533,10 +539,11 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
     })
     
     # Main SKU - PO (Line)
+    po_data = clean_data(main_df['PO'])
     series.append({
         "name": f"{main_sku} - PO",
         "type": "line",
-        "data": main_df['PO'].tolist(),
+        "data": po_data,
         "lineStyle": {"color": "#F59E0B", "width": 3, "type": "dashed"},
         "symbol": "diamond",
         "symbolSize": 8,
@@ -550,28 +557,31 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
     
     # Compare SKU (if exists)
     if compare_df is not None and not compare_df.empty:
+        compare_sales = clean_data(compare_df['Sales'])
         series.append({
             "name": f"{compare_sku} - Sales",
             "type": "bar",
-            "data": compare_df['Sales'].tolist(),
+            "data": compare_sales,
             "itemStyle": {"color": "#A7F3D0", "borderRadius": [4, 4, 0, 0]},
             "barWidth": "30%",
             "label": {"show": True, "position": "top", "fontSize": 10}
         })
         
+        compare_inbound = clean_data(compare_df['PO_Delivered'])
         series.append({
             "name": f"{compare_sku} - Inbound",
             "type": "bar",
-            "data": compare_df['PO_Delivered'].tolist(),
+            "data": compare_inbound,
             "itemStyle": {"color": "#BFDBFE", "borderRadius": [4, 4, 0, 0]},
             "barWidth": "30%",
             "label": {"show": True, "position": "top", "fontSize": 10}
         })
         
+        compare_po = clean_data(compare_df['PO'])
         series.append({
             "name": f"{compare_sku} - PO",
             "type": "line",
-            "data": compare_df['PO'].tolist(),
+            "data": compare_po,
             "lineStyle": {"color": "#FDE68A", "width": 3, "type": "dashed"},
             "symbol": "diamond",
             "symbolSize": 8,
@@ -654,10 +664,13 @@ def create_multi_brand_chart_echarts(df_filtered, display_metric="Quantity"):
     
     series = []
     for i, brand in enumerate(pivot_data.columns):
+        # PERBAIKAN: Bersihkan NaN dan konversi ke int
+        brand_data = pivot_data[brand].fillna(0).round(0).astype(int).tolist()
+        
         series.append({
             "name": brand,
             "type": "bar",
-            "data": pivot_data[brand].round(0).tolist(),
+            "data": brand_data,
             "itemStyle": {
                 "color": colors[i % len(colors)],
                 "borderRadius": [4, 4, 0, 0]
@@ -716,6 +729,10 @@ def create_tier_chart_echarts(tier_performance):
     if tier_performance.empty:
         return None
     
+    # PERBAIKAN: Bersihkan NaN
+    tier_data = tier_performance['Total_Sales_Qty'].fillna(0).astype(int).tolist()
+    tier_labels = tier_performance['SKU_Tier'].fillna('Unknown').tolist()
+    
     options = {
         "title": {
             "text": "💎 Sales Quantity by SKU Tier",
@@ -734,7 +751,7 @@ def create_tier_chart_echarts(tier_performance):
         },
         "xAxis": {
             "type": "category",
-            "data": tier_performance['SKU_Tier'].tolist(),
+            "data": tier_labels,
             "axisLabel": {"fontSize": 12, "fontWeight": "bold"}
         },
         "yAxis": {
@@ -745,7 +762,7 @@ def create_tier_chart_echarts(tier_performance):
         "series": [{
             "name": "Sales Qty",
             "type": "bar",
-            "data": tier_performance['Total_Sales_Qty'].tolist(),
+            "data": tier_data,
             "itemStyle": {
                 "color": {
                     "type": "linear",
@@ -760,7 +777,6 @@ def create_tier_chart_echarts(tier_performance):
             "label": {
                 "show": True,
                 "position": "top",
-                "formatter": "{c}",
                 "fontSize": 11,
                 "fontWeight": "bold"
             }
@@ -769,7 +785,7 @@ def create_tier_chart_echarts(tier_performance):
     
     return options
 
-def create_status_pie_echarts(status_performance):
+def create_status_pie_chart_echarts(status_performance):
     """Create status distribution pie chart with ECharts"""
     
     if status_performance.empty:
@@ -779,11 +795,13 @@ def create_status_pie_echarts(status_performance):
     color_map = {'ACTIVE': '#10B981', 'INACTIVE': '#EF4444', 'UNKNOWN': '#9CA3AF'}
     
     for _, row in status_performance.iterrows():
-        status = row['Status']
+        status = str(row['Status']) if pd.notna(row['Status']) else 'UNKNOWN'
+        qty = int(row['Total_Sales_Qty']) if pd.notna(row['Total_Sales_Qty']) else 0
+        
         pie_data.append({
-            "value": int(row['Total_Sales_Qty']),
+            "value": qty,
             "name": status,
-            "itemStyle": {"color": color_map.get(status, '#9CA3AF')}
+            "itemStyle": {"color": color_map.get(status.upper(), '#9CA3AF')}
         })
     
     options = {
@@ -834,6 +852,10 @@ def create_seasonality_chart_echarts(seasonality):
     if seasonality.empty:
         return None
     
+    # PERBAIKAN: Bersihkan NaN
+    month_labels = seasonality['Month_Name'].fillna('Unknown').tolist()
+    seasonal_data = seasonality['Seasonal_Index'].fillna(1.0).round(2).tolist()
+    
     options = {
         "title": {
             "text": "🌙 Seasonal Index (Average Sales by Month)",
@@ -853,7 +875,7 @@ def create_seasonality_chart_echarts(seasonality):
         },
         "xAxis": {
             "type": "category",
-            "data": seasonality['Month_Name'].tolist(),
+            "data": month_labels,
             "axisLabel": {"fontSize": 12}
         },
         "yAxis": {
@@ -864,7 +886,7 @@ def create_seasonality_chart_echarts(seasonality):
         "series": [{
             "name": "Seasonal Index",
             "type": "bar",
-            "data": seasonality['Seasonal_Index'].round(2).tolist(),
+            "data": seasonal_data,
             "itemStyle": {
                 "color": {
                     "type": "linear",
@@ -898,7 +920,12 @@ def create_pareto_chart_echarts(all_skus_pareto):
     if all_skus_pareto.empty:
         return None
     
-    top_20 = all_skus_pareto.head(20)
+    top_20 = all_skus_pareto.head(20).copy()
+    
+    # PERBAIKAN: Bersihkan NaN
+    sku_labels = top_20['SKU_ID'].astype(str).fillna('Unknown').tolist()
+    sales_data = top_20['Sales_Qty'].fillna(0).astype(int).tolist()
+    cum_data = top_20['Cumulative_Percent'].fillna(0).round(1).tolist()
     
     options = {
         "title": {
@@ -922,7 +949,7 @@ def create_pareto_chart_echarts(all_skus_pareto):
         },
         "xAxis": {
             "type": "category",
-            "data": top_20['SKU_ID'].astype(str).tolist(),
+            "data": sku_labels,
             "axisLabel": {"rotate": 45, "fontSize": 10}
         },
         "yAxis": [
@@ -944,7 +971,7 @@ def create_pareto_chart_echarts(all_skus_pareto):
             {
                 "name": "Sales Qty",
                 "type": "bar",
-                "data": top_20['Sales_Qty'].tolist(),
+                "data": sales_data,
                 "itemStyle": {
                     "color": "#10B981",
                     "borderRadius": [4, 4, 0, 0]
@@ -959,7 +986,7 @@ def create_pareto_chart_echarts(all_skus_pareto):
                 "name": "Cumulative %",
                 "type": "line",
                 "yAxisIndex": 1,
-                "data": top_20['Cumulative_Percent'].round(1).tolist(),
+                "data": cum_data,
                 "smooth": True,
                 "lineStyle": {"color": "#F59E0B", "width": 3},
                 "symbol": "circle",
@@ -987,16 +1014,20 @@ def create_mom_growth_chart_echarts(growth_metrics):
         return None
     
     months = growth_metrics['Month'].dt.strftime('%b %Y').tolist()
-    growth_data = growth_metrics['MoM_Growth_Qty'].round(1).tolist()
     
-    # Color based on positive/negative - PERBAIKAN: jangan pakai lambda
-    bar_colors = ['#10B981' if g >= 0 else '#EF4444' for g in growth_data]
+    # PERBAIKAN: Ganti NaN dengan 0
+    growth_data = growth_metrics['MoM_Growth_Qty'].fillna(0).round(1).tolist()
+    
+    # Color based on positive/negative
+    bar_colors = ['#10B981' if (g if g is not None else 0) >= 0 else '#EF4444' for g in growth_data]
     
     # Buat series data dengan itemStyle individual
     series_data = []
-    for i, (month, growth, color) in enumerate(zip(months, growth_data, bar_colors)):
+    for i, (growth, color) in enumerate(zip(growth_data, bar_colors)):
+        # PERBAIKAN: Pastikan value bukan NaN
+        value = growth if growth is not None and not pd.isna(growth) else 0
         series_data.append({
-            "value": growth,
+            "value": value,
             "itemStyle": {"color": color, "borderRadius": [4, 4, 0, 0]}
         })
     
@@ -1059,10 +1090,13 @@ def create_expiry_pie_echarts(expiry_df):
     
     pie_data = []
     for _, row in expiry_df.iterrows():
+        category = str(row['Category']) if pd.notna(row['Category']) else 'Unknown'
+        qty = int(row['Qty']) if pd.notna(row['Qty']) else 0
+        
         pie_data.append({
-            "value": int(row['Qty']),
-            "name": row['Category'],
-            "itemStyle": {"color": color_map.get(row['Category'], '#9CA3AF')}
+            "value": qty,
+            "name": category,
+            "itemStyle": {"color": color_map.get(category, '#9CA3AF')}
         })
     
     options = {
