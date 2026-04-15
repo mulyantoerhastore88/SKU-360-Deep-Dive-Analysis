@@ -514,7 +514,6 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
         "label": {
             "show": True,
             "position": "top",
-            "formatter": "{c}",
             "fontSize": 10
         }
     })
@@ -529,7 +528,6 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
         "label": {
             "show": True,
             "position": "top",
-            "formatter": "{c}",
             "fontSize": 10
         }
     })
@@ -546,7 +544,6 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
         "label": {
             "show": True,
             "position": "top",
-            "formatter": "{c}",
             "fontSize": 10
         }
     })
@@ -559,7 +556,7 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
             "data": compare_df['Sales'].tolist(),
             "itemStyle": {"color": "#A7F3D0", "borderRadius": [4, 4, 0, 0]},
             "barWidth": "30%",
-            "label": {"show": True, "position": "top", "formatter": "{c}", "fontSize": 10}
+            "label": {"show": True, "position": "top", "fontSize": 10}
         })
         
         series.append({
@@ -568,7 +565,7 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
             "data": compare_df['PO_Delivered'].tolist(),
             "itemStyle": {"color": "#BFDBFE", "borderRadius": [4, 4, 0, 0]},
             "barWidth": "30%",
-            "label": {"show": True, "position": "top", "formatter": "{c}", "fontSize": 10}
+            "label": {"show": True, "position": "top", "fontSize": 10}
         })
         
         series.append({
@@ -579,7 +576,7 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
             "symbol": "diamond",
             "symbolSize": 8,
             "itemStyle": {"color": "#FDE68A"},
-            "label": {"show": True, "position": "top", "formatter": "{c}", "fontSize": 10}
+            "label": {"show": True, "position": "top", "fontSize": 10}
         })
     
     options = {
@@ -593,7 +590,6 @@ def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sk
             "axisPointer": {"type": "shadow"}
         },
         "legend": {
-            "data": [s["name"] for s in series],
             "bottom": 0,
             "type": "scroll",
             "pageIconColor": "#667eea"
@@ -662,11 +658,13 @@ def create_multi_brand_chart_echarts(df_filtered, display_metric="Quantity"):
             "name": brand,
             "type": "bar",
             "data": pivot_data[brand].round(0).tolist(),
-            "itemStyle": {"color": colors[i % len(colors)], "borderRadius": [4, 4, 0, 0]},
+            "itemStyle": {
+                "color": colors[i % len(colors)],
+                "borderRadius": [4, 4, 0, 0]
+            },
             "label": {
                 "show": True,
                 "position": "top",
-                "formatter": "{c}",
                 "fontSize": 10
             }
         })
@@ -954,7 +952,6 @@ def create_pareto_chart_echarts(all_skus_pareto):
                 "label": {
                     "show": True,
                     "position": "top",
-                    "formatter": "{c}",
                     "fontSize": 10
                 }
             },
@@ -992,8 +989,16 @@ def create_mom_growth_chart_echarts(growth_metrics):
     months = growth_metrics['Month'].dt.strftime('%b %Y').tolist()
     growth_data = growth_metrics['MoM_Growth_Qty'].round(1).tolist()
     
-    # Color based on positive/negative
+    # Color based on positive/negative - PERBAIKAN: jangan pakai lambda
     bar_colors = ['#10B981' if g >= 0 else '#EF4444' for g in growth_data]
+    
+    # Buat series data dengan itemStyle individual
+    series_data = []
+    for i, (month, growth, color) in enumerate(zip(months, growth_data, bar_colors)):
+        series_data.append({
+            "value": growth,
+            "itemStyle": {"color": color, "borderRadius": [4, 4, 0, 0]}
+        })
     
     options = {
         "title": {
@@ -1025,21 +1030,13 @@ def create_mom_growth_chart_echarts(growth_metrics):
         "series": [{
             "name": "MoM Growth",
             "type": "bar",
-            "data": growth_data,
-            "itemStyle": {
-                "color": lambda params: bar_colors[params["dataIndex"]],
-                "borderRadius": [4, 4, 0, 0]
-            },
+            "data": series_data,
             "label": {
                 "show": True,
                 "position": "top",
                 "formatter": "{c}%",
                 "fontSize": 11,
                 "fontWeight": "bold"
-            },
-            "markLine": {
-                "data": [{"yAxis": 0}],
-                "lineStyle": {"color": "#6B7280", "type": "solid", "width": 2}
             }
         }]
     }
