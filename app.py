@@ -1512,11 +1512,11 @@ with tab_sku:
         """, unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 2: SALES ANALYTICS PRO
+# TAB 2: SALES ANALYTICS PRO (IMPROVED)
 # =============================================================================
 with tab_sales_analytics:
     st.subheader("📊 Sales Analytics Pro")
-    st.caption("Deep Dive Analysis with Interactive ECharts")
+    st.caption("Multi-Brand Comparison: Sales vs PO vs Inbound")
     
     if df_sales_analysis.empty:
         st.warning("⚠️ Tidak ada data sales untuk dianalisis.")
@@ -1533,7 +1533,8 @@ with tab_sales_analytics:
                 start_idx, end_idx = st.select_slider(
                     "📅 Range Periode",
                     options=date_options,
-                    value=(date_options[0], date_options[-1])
+                    value=(date_options[0], date_options[-1]),
+                    key="sales_range_filter"
                 )
                 start_date = datetime.strptime(start_idx, '%b %Y')
                 end_date = datetime.strptime(end_idx, '%b %Y')
@@ -1546,11 +1547,16 @@ with tab_sales_analytics:
             selected_brands = st.multiselect(
                 "🏷️ Pilih Brand",
                 options=all_brands,
-                default=all_brands[:5] if len(all_brands) > 5 else all_brands
+                default=all_brands[:5] if len(all_brands) > 5 else all_brands,
+                key="brand_filter_tab2"
             )
         
         with col3:
-            display_metric = st.selectbox("📊 Metric", ["Quantity", "Revenue"])
+            display_type = st.selectbox(
+                "📊 Tampilkan",
+                ["Quantity", "Revenue"],
+                key="display_type_tab2"
+            )
         
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -1564,30 +1570,306 @@ with tab_sales_analytics:
             df_filtered = df_filtered[df_filtered['Brand'].isin(selected_brands)]
         
         if not df_filtered.empty:
-            # Summary Metrics
-            total_qty = df_filtered['Sales_Qty'].sum()
-            total_value = df_filtered['Sales_Value'].sum()
-            unique_skus = df_filtered['SKU_ID'].nunique()
-            unique_brands = df_filtered['Brand'].nunique()
+            # =========================================================================
+            # MULTI-BRAND COMPARISON CHART (Sales, PO & Inbound)
+            # =========================================================================
+            st.markdown("### 📈 Multi-Brand Comparison: Sales vs PO vs Inbound")
             
-            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-            with col_s1:
-                st.metric("Total Sales Qty", f"{total_qty:,.0f}")
-            with col_s2:
-                st.metric("Total Sales Value", format_rupiah(total_value))
-            with col_s3:
-                st.metric("Active SKU", f"{unique_skus:,}")
-            with col_s4:
-                st.metric("Active Brand", f"{unique_brands:,}")
+            # Siapkan data PO dan Inbound dengan brand
+            def prepare_po_inbound_by_brand(df_po, df_po_delivered, df_product, selected_brands, start_date, end_date):
+                """Siapkan data PO dan Inbound per brand per bulan"""
+                
+                # PO Data
+                po_by_brand_monthly = pd.DataFrame()
+                if not df_po.empty:
+                    po_filtered = df_po[(df_po['Month'] >= start_date) & (df_po['Month'] <= end_date)].copy()
+                    if not df_product.empty and not po_filtered.empty:
+                        po_filtered = pd.merge(po_filtered, df_product[['SKU_ID', 'Brand']], on='SKU_ID', how='left')
+                        po_filtered = po_filtered[po_filtered['Brand'].isin(selected_brands)]
+                        po_by_brand_monthly = po_filtered.groupby(['Brand', po_filtered['Month'].dt.to_period('M')])['PO_Qty'].sum().reset_index()
+                        po_by_brand_monthly['Month'] = po_by_brand_monthly['Month'].dt.to_timestamp()
+                
+                # Inbound Data
+                inbound_by_brand_monthly = pd.DataFrame()
+                if not df_po_delivered.empty:
+                    inbound_filtered = df_po_delivered[(df_po_delivered['Month'] >= start_date) & (df_po_delivered['Month'] <= end_date)].copy()
+                    if not df_product.empty and not inbound_filtered.empty:
+                        inbound_filtered = pd.merge(inbound_filtered, df_product[['SKU_ID', 'Brand']], on='SKU_ID', how='left')
+                        inbound_filtered = inbound_filtered[inbound_filtered['Brand'].isin(selected_brands)]
+                        inbound_by_brand_monthly = inbound_filtered.groupby(['Brand', inbound_filtered['Month'].dt.to_period('M')])['PO_Delivered_Qty'].sum().reset_index()
+                        inbound_by_brand_monthly['Month'] = inbound_by_brand_monthly['Month'].dt.to_timestamp()
+                
+                return po_by_brand_monthly, inbound_by_brand_monthly
             
-            # Multi-Brand Chart
+            # Ambil data PO dan Inbound
+            po_brand_monthly, inbound_brand_monthly = prepare_po_inbound_by_brand(
+                df_po, df_po_delivered, df_product, selected_brands, start_date, end_date
+            )
+            
+            # Siapkan data Sales per brand per bulan
+            value_col = 'Sales_Qty' if display_type == "Quantity" else 'Sales_Value'
+            sales_brand_monthly = df_filtered.groupby(['Brand', df_filtered['Month'].dt.to_period('M')])[value_col].sum().reset_index()
+            sales_brand_monthly['Month'] = sales_brand_monthly['Month'].dt.to_timestamp()
+            
+            # Dapatkan semua kombinasi brand dan bulan
+            all_months = sorted(df_filtered['Month'].unique())
+            
+            # Fungsi untuk membuat chart multi-series
+            def create_multi_brand_sales_po_inbound_chart(sales_data, po_data, inbound_data, brands, months, display_type):
+                """Create ECharts with Sales, PO, and Inbound for multiple brands"""
+                
+                if not brands:
+                    return None
+                
+                month_labels = [m.strftime('%b %Y') for m in months]
+                
+                colors_sales = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0']
+                colors_po = ['#F59E0B', '#FBBF24', '#FCD34D', '#FDE68A']
+                colors_inbound = ['#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE']
+                
+                series = []
+                legend_data = []
+                
+                for i, brand in enumerate(brands):
+                    # Sales data
+                    brand_sales = sales_data[sales_data['Brand'] == brand]
+                    sales_dict = {row['Month']: row[value_col] for _, row in brand_sales.iterrows()}
+                    sales_values = [sales_dict.get(m, 0) for m in months]
+                    
+                    series.append({
+                        "name": f"{brand} - Sales",
+                        "type": "bar",
+                        "data": [int(v) if not pd.isna(v) else 0 for v in sales_values],
+                        "itemStyle": {"color": colors_sales[i % len(colors_sales)], "borderRadius": [4, 4, 0, 0]},
+                        "barWidth": "25%",
+                        "barCategoryGap": "30%",
+                        "label": {"show": True, "position": "top", "fontSize": 9}
+                    })
+                    legend_data.append(f"{brand} - Sales")
+                    
+                    # PO data
+                    if not po_data.empty:
+                        brand_po = po_data[po_data['Brand'] == brand]
+                        po_dict = {row['Month']: row['PO_Qty'] for _, row in brand_po.iterrows()}
+                        po_values = [po_dict.get(m, 0) for m in months]
+                        
+                        series.append({
+                            "name": f"{brand} - PO",
+                            "type": "line",
+                            "data": [int(v) if not pd.isna(v) else 0 for v in po_values],
+                            "lineStyle": {"color": colors_po[i % len(colors_po)], "width": 2, "type": "dashed"},
+                            "symbol": "diamond",
+                            "symbolSize": 6,
+                            "itemStyle": {"color": colors_po[i % len(colors_po)]},
+                            "label": {"show": True, "position": "top", "fontSize": 9}
+                        })
+                        legend_data.append(f"{brand} - PO")
+                    
+                    # Inbound data
+                    if not inbound_data.empty:
+                        brand_inbound = inbound_data[inbound_data['Brand'] == brand]
+                        inbound_dict = {row['Month']: row['PO_Delivered_Qty'] for _, row in brand_inbound.iterrows()}
+                        inbound_values = [inbound_dict.get(m, 0) for m in months]
+                        
+                        series.append({
+                            "name": f"{brand} - Inbound",
+                            "type": "bar",
+                            "data": [int(v) if not pd.isna(v) else 0 for v in inbound_values],
+                            "itemStyle": {"color": colors_inbound[i % len(colors_inbound)], "borderRadius": [4, 4, 0, 0]},
+                            "barWidth": "25%",
+                            "barCategoryGap": "30%",
+                            "label": {"show": True, "position": "top", "fontSize": 9}
+                        })
+                        legend_data.append(f"{brand} - Inbound")
+                
+                options = {
+                    "title": {
+                        "text": f"📊 Multi-Brand: Sales vs PO vs Inbound ({display_type})",
+                        "left": "center",
+                        "textStyle": {"fontSize": 16, "fontWeight": "bold"}
+                    },
+                    "tooltip": {
+                        "trigger": "axis",
+                        "axisPointer": {"type": "shadow"}
+                    },
+                    "legend": {
+                        "data": legend_data,
+                        "bottom": 0,
+                        "type": "scroll",
+                        "pageIconColor": "#667eea"
+                    },
+                    "grid": {
+                        "left": "8%",
+                        "right": "5%",
+                        "bottom": "20%",
+                        "top": "15%",
+                        "containLabel": True
+                    },
+                    "xAxis": {
+                        "type": "category",
+                        "data": month_labels,
+                        "axisLabel": {"rotate": 45, "fontSize": 11}
+                    },
+                    "yAxis": {
+                        "type": "value",
+                        "name": "Quantity" if display_type == "Quantity" else "Value (Rp)",
+                        "axisLabel": {"fontSize": 11}
+                    },
+                    "series": series,
+                    "dataZoom": [
+                        {"type": "slider", "start": 0, "end": 100, "height": 20, "bottom": 25},
+                        {"type": "inside", "start": 0, "end": 100}
+                    ]
+                }
+                
+                return options
+            
+            # Render Multi-Brand Chart
+            if selected_brands:
+                chart_options = create_multi_brand_sales_po_inbound_chart(
+                    sales_brand_monthly, po_brand_monthly, inbound_brand_monthly,
+                    selected_brands, all_months, display_type
+                )
+                if chart_options:
+                    st_echarts(options=chart_options, height="500px")
+            
+            # =========================================================================
+            # TABULAR DATA DENGAN TOTAL
+            # =========================================================================
             st.markdown("---")
-            brand_chart = create_multi_brand_chart_echarts(df_filtered, display_metric)
-            if brand_chart:
-                st_echarts(options=brand_chart, height="450px")
+            st.markdown("### 📋 Summary by Brand")
             
-            # Tier & Status Analysis
+            # Hitung total per brand
+            summary_data = []
+            
+            for brand in selected_brands:
+                # Sales total
+                brand_sales = sales_brand_monthly[sales_brand_monthly['Brand'] == brand]
+                total_sales = brand_sales[value_col].sum() if not brand_sales.empty else 0
+                
+                # PO total
+                brand_po = po_brand_monthly[po_brand_monthly['Brand'] == brand] if not po_brand_monthly.empty else pd.DataFrame()
+                total_po = brand_po['PO_Qty'].sum() if not brand_po.empty else 0
+                
+                # Inbound total
+                brand_inbound = inbound_brand_monthly[inbound_brand_monthly['Brand'] == brand] if not inbound_brand_monthly.empty else pd.DataFrame()
+                total_inbound = brand_inbound['PO_Delivered_Qty'].sum() if not brand_inbound.empty else 0
+                
+                # Hitung metrik tambahan
+                sell_through = (total_sales / total_po * 100) if total_po > 0 else 0
+                inbound_rate = (total_inbound / total_po * 100) if total_po > 0 else 0
+                
+                # Value calculations untuk revenue mode
+                if display_type == "Revenue":
+                    summary_data.append({
+                        'Brand': brand,
+                        'Sales Value': total_sales,
+                        'PO Value': total_po,
+                        'Inbound Value': total_inbound,
+                        'Sell Through %': sell_through,
+                        'Inbound Rate %': inbound_rate
+                    })
+                else:
+                    summary_data.append({
+                        'Brand': brand,
+                        'Sales Qty': total_sales,
+                        'PO Qty': total_po,
+                        'Inbound Qty': total_inbound,
+                        'Sell Through %': sell_through,
+                        'Inbound Rate %': inbound_rate
+                    })
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                
+                # Hitung Grand Total
+                if display_type == "Revenue":
+                    grand_total = {
+                        'Brand': '📊 GRAND TOTAL',
+                        'Sales Value': summary_df['Sales Value'].sum(),
+                        'PO Value': summary_df['PO Value'].sum(),
+                        'Inbound Value': summary_df['Inbound Value'].sum(),
+                        'Sell Through %': (summary_df['Sales Value'].sum() / summary_df['PO Value'].sum() * 100) if summary_df['PO Value'].sum() > 0 else 0,
+                        'Inbound Rate %': (summary_df['Inbound Value'].sum() / summary_df['PO Value'].sum() * 100) if summary_df['PO Value'].sum() > 0 else 0
+                    }
+                    
+                    # Format currency
+                    display_df = summary_df.copy()
+                    display_df['Sales Value'] = display_df['Sales Value'].apply(format_rupiah)
+                    display_df['PO Value'] = display_df['PO Value'].apply(format_rupiah)
+                    display_df['Inbound Value'] = display_df['Inbound Value'].apply(format_rupiah)
+                    display_df['Sell Through %'] = display_df['Sell Through %'].apply(lambda x: f"{x:.1f}%")
+                    display_df['Inbound Rate %'] = display_df['Inbound Rate %'].apply(lambda x: f"{x:.1f}%")
+                    
+                    # Format grand total
+                    grand_total['Sales Value'] = format_rupiah(grand_total['Sales Value'])
+                    grand_total['PO Value'] = format_rupiah(grand_total['PO Value'])
+                    grand_total['Inbound Value'] = format_rupiah(grand_total['Inbound Value'])
+                    grand_total['Sell Through %'] = f"{grand_total['Sell Through %']:.1f}%"
+                    grand_total['Inbound Rate %'] = f"{grand_total['Inbound Rate %']:.1f}%"
+                else:
+                    grand_total = {
+                        'Brand': '📊 GRAND TOTAL',
+                        'Sales Qty': int(summary_df['Sales Qty'].sum()),
+                        'PO Qty': int(summary_df['PO Qty'].sum()),
+                        'Inbound Qty': int(summary_df['Inbound Qty'].sum()),
+                        'Sell Through %': (summary_df['Sales Qty'].sum() / summary_df['PO Qty'].sum() * 100) if summary_df['PO Qty'].sum() > 0 else 0,
+                        'Inbound Rate %': (summary_df['Inbound Qty'].sum() / summary_df['PO Qty'].sum() * 100) if summary_df['PO Qty'].sum() > 0 else 0
+                    }
+                    
+                    # Format untuk display
+                    display_df = summary_df.copy()
+                    display_df['Sales Qty'] = display_df['Sales Qty'].apply(lambda x: f"{int(x):,}")
+                    display_df['PO Qty'] = display_df['PO Qty'].apply(lambda x: f"{int(x):,}")
+                    display_df['Inbound Qty'] = display_df['Inbound Qty'].apply(lambda x: f"{int(x):,}")
+                    display_df['Sell Through %'] = display_df['Sell Through %'].apply(lambda x: f"{x:.1f}%")
+                    display_df['Inbound Rate %'] = display_df['Inbound Rate %'].apply(lambda x: f"{x:.1f}%")
+                    
+                    # Format grand total
+                    grand_total['Sales Qty'] = f"{grand_total['Sales Qty']:,}"
+                    grand_total['PO Qty'] = f"{grand_total['PO Qty']:,}"
+                    grand_total['Inbound Qty'] = f"{grand_total['Inbound Qty']:,}"
+                    grand_total['Sell Through %'] = f"{grand_total['Sell Through %']:.1f}%"
+                    grand_total['Inbound Rate %'] = f"{grand_total['Inbound Rate %']:.1f}%"
+                
+                # Tampilkan tabel
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                # Tampilkan Grand Total dengan styling
+                st.markdown("---")
+                st.markdown("### 📊 Grand Total")
+                
+                if display_type == "Revenue":
+                    col_gt1, col_gt2, col_gt3, col_gt4, col_gt5 = st.columns(5)
+                    with col_gt1:
+                        st.metric("Total Sales", grand_total['Sales Value'])
+                    with col_gt2:
+                        st.metric("Total PO", grand_total['PO Value'])
+                    with col_gt3:
+                        st.metric("Total Inbound", grand_total['Inbound Value'])
+                    with col_gt4:
+                        st.metric("Overall Sell Through", grand_total['Sell Through %'])
+                    with col_gt5:
+                        st.metric("Overall Inbound Rate", grand_total['Inbound Rate %'])
+                else:
+                    col_gt1, col_gt2, col_gt3, col_gt4, col_gt5 = st.columns(5)
+                    with col_gt1:
+                        st.metric("Total Sales Qty", grand_total['Sales Qty'])
+                    with col_gt2:
+                        st.metric("Total PO Qty", grand_total['PO Qty'])
+                    with col_gt3:
+                        st.metric("Total Inbound Qty", grand_total['Inbound Qty'])
+                    with col_gt4:
+                        st.metric("Overall Sell Through", grand_total['Sell Through %'])
+                    with col_gt5:
+                        st.metric("Overall Inbound Rate", grand_total['Inbound Rate %'])
+            
+            # =========================================================================
+            # TIER & STATUS ANALYSIS (Tetap di bawah)
+            # =========================================================================
             st.markdown("---")
+            st.markdown("### 💎 SKU Tier & Status Analysis")
+            
             col_t1, col_t2 = st.columns(2)
             
             with col_t1:
@@ -1596,6 +1878,14 @@ with tab_sales_analytics:
                     tier_chart = create_tier_chart_echarts(tier_perf)
                     if tier_chart:
                         st_echarts(options=tier_chart, height="350px")
+                    
+                    # Tabel Tier
+                    tier_display = tier_perf.copy()
+                    tier_display['Share_Qty'] = (tier_display['Total_Sales_Qty'] / tier_display['Total_Sales_Qty'].sum() * 100).round(1)
+                    tier_display['Total_Sales_Qty'] = tier_display['Total_Sales_Qty'].apply(lambda x: f"{int(x):,}")
+                    tier_display['Total_Sales_Value'] = tier_display['Total_Sales_Value'].apply(format_rupiah)
+                    tier_display['Share_Qty'] = tier_display['Share_Qty'].apply(lambda x: f"{x:.1f}%")
+                    st.dataframe(tier_display, use_container_width=True, hide_index=True)
             
             with col_t2:
                 status_perf = get_status_performance(df_filtered)
@@ -1603,9 +1893,19 @@ with tab_sales_analytics:
                     status_chart = create_status_pie_chart_echarts(status_perf)
                     if status_chart:
                         st_echarts(options=status_chart, height="350px")
+                    
+                    # Tabel Status
+                    status_display = status_perf.copy()
+                    status_display['Total_Sales_Qty'] = status_display['Total_Sales_Qty'].apply(lambda x: f"{int(x):,}")
+                    status_display['Total_Sales_Value'] = status_display['Total_Sales_Value'].apply(format_rupiah)
+                    st.dataframe(status_display, use_container_width=True, hide_index=True)
             
-            # Seasonality & Pareto
+            # =========================================================================
+            # SEASONALITY & PARETO
+            # =========================================================================
             st.markdown("---")
+            st.markdown("### 🌙 Seasonality & Pareto Analysis")
+            
             col_szn1, col_szn2 = st.columns(2)
             
             with col_szn1:
@@ -1614,6 +1914,10 @@ with tab_sales_analytics:
                     szn_chart = create_seasonality_chart_echarts(seasonality)
                     if szn_chart:
                         st_echarts(options=szn_chart, height="350px")
+                    
+                    peak_month = seasonality.loc[seasonality['Seasonal_Index'].idxmax(), 'Month_Name']
+                    low_month = seasonality.loc[seasonality['Seasonal_Index'].idxmin(), 'Month_Name']
+                    st.caption(f"📊 **Peak Season:** {peak_month} | **Low Season:** {low_month}")
             
             with col_szn2:
                 pareto_80, all_skus = calculate_pareto(df_filtered, 80)
@@ -1630,13 +1934,21 @@ with tab_sales_analytics:
                     </div>
                     """, unsafe_allow_html=True)
             
-            # MoM Growth
+            # =========================================================================
+            # MoM GROWTH
+            # =========================================================================
             st.markdown("---")
+            st.markdown("### 📉 Month-over-Month Growth")
+            
             growth_metrics = calculate_growth_metrics(df_filtered)
             if not growth_metrics.empty:
                 growth_chart = create_mom_growth_chart_echarts(growth_metrics)
                 if growth_chart:
                     st_echarts(options=growth_chart, height="400px")
+                
+                avg_growth = growth_metrics['MoM_Growth_Qty'].mean()
+                st.caption(f"📈 **Average MoM Growth:** {avg_growth:+.1f}%")
+                
         else:
             st.warning("⚠️ Tidak ada data untuk filter yang dipilih.")
 
