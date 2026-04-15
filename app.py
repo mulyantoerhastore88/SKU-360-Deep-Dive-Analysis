@@ -2066,9 +2066,9 @@ with tab_sales_analytics:
                                     return 'background-color: #FFFBEB; color: #92400E'
                                 return ''
                             
-                            # Apply styling
-                            styled_df = display_df.style.applymap(color_sell_through, subset=['Sell_Through_%'])
-                            styled_df = styled_df.applymap(color_anomaly, subset=['Anomaly'])
+                            # Apply styling (gunakan map untuk pandas versi baru)
+                            styled_df = display_df.style.map(color_sell_through, subset=['Sell_Through_%'])
+                            styled_df = styled_df.map(color_anomaly, subset=['Anomaly'])
                             
                             st.dataframe(
                                 styled_df,
