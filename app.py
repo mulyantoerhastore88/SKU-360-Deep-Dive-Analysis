@@ -1865,6 +1865,267 @@ with tab_sales_analytics:
                         st.metric("Overall Inbound Rate", grand_total['Inbound Rate %'])
             
             # =========================================================================
+            # DRILL-DOWN: DETAIL SKU PER BRAND (Expandable)
+            # =========================================================================
+            st.markdown("---")
+            st.markdown("### 🔍 Drill-Down: Detail SKU per Brand")
+            st.caption("Klik brand untuk melihat detail SKU yang menyebabkan anomali Sell Through")
+            
+            # Siapkan data detail SKU
+            def get_sku_detail_by_brand(df_sales, df_po, df_po_delivered, df_product, selected_brands, start_date, end_date):
+                """Get SKU level details for each brand"""
+                
+                sku_details = []
+                
+                for brand in selected_brands:
+                    # Get SKUs for this brand
+                    brand_skus = df_product[df_product['Brand'] == brand]['SKU_ID'].unique() if not df_product.empty else []
+                    
+                    for sku in brand_skus:
+                        # Sales data
+                        sku_sales = df_sales[
+                            (df_sales['SKU_ID'] == sku) & 
+                            (df_sales['Month'] >= start_date) & 
+                            (df_sales['Month'] <= end_date)
+                        ]['Sales_Qty'].sum() if not df_sales.empty else 0
+                        
+                        # PO data
+                        sku_po = df_po[
+                            (df_po['SKU_ID'] == sku) & 
+                            (df_po['Month'] >= start_date) & 
+                            (df_po['Month'] <= end_date)
+                        ]['PO_Qty'].sum() if not df_po.empty else 0
+                        
+                        # Inbound data
+                        sku_inbound = df_po_delivered[
+                            (df_po_delivered['SKU_ID'] == sku) & 
+                            (df_po_delivered['Month'] >= start_date) & 
+                            (df_po_delivered['Month'] <= end_date)
+                        ]['PO_Delivered_Qty'].sum() if not df_po_delivered.empty else 0
+                        
+                        # Get product info
+                        product_info = df_product[df_product['SKU_ID'] == sku]
+                        product_name = product_info.iloc[0].get('Product_Name', sku) if not product_info.empty else sku
+                        sku_tier = product_info.iloc[0].get('SKU_Tier', '-') if not product_info.empty else '-'
+                        status = product_info.iloc[0].get('Status', '-') if not product_info.empty else '-'
+                        floor_price = product_info.iloc[0].get('Floor_Price', 0) if not product_info.empty else 0
+                        purchase_price = product_info.iloc[0].get('Purchase_Order_Price', 0) if not product_info.empty else 0
+                        
+                        # Calculate metrics
+                        sell_through = (sku_sales / sku_po * 100) if sku_po > 0 else 0
+                        inbound_rate = (sku_inbound / sku_po * 100) if sku_po > 0 else 0
+                        sales_value = sku_sales * floor_price
+                        po_value = sku_po * purchase_price
+                        inbound_value = sku_inbound * purchase_price
+                        
+                        # Determine anomaly status
+                        anomaly = ""
+                        if sell_through > 100:
+                            anomaly = "🔥 OVERSELL"
+                        elif sell_through < 40 and sku_po > 0:
+                            anomaly = "📦 SLOW"
+                        elif sku_po > 0 and sku_sales == 0:
+                            anomaly = "❌ NO SALES"
+                        elif inbound_rate < 80 and sku_po > 0:
+                            anomaly = "⚠️ LOW INBOUND"
+                        elif sku_sales > 0 and sku_po == 0:
+                            anomaly = "🔄 NO PO"
+                        
+                        if sku_sales > 0 or sku_po > 0 or sku_inbound > 0:
+                            sku_details.append({
+                                'Brand': brand,
+                                'SKU_ID': sku,
+                                'Product_Name': product_name,
+                                'SKU_Tier': sku_tier,
+                                'Status': status,
+                                'Sales_Qty': int(sku_sales),
+                                'PO_Qty': int(sku_po),
+                                'Inbound_Qty': int(sku_inbound),
+                                'Sell_Through_%': round(sell_through, 1),
+                                'Inbound_Rate_%': round(inbound_rate, 1),
+                                'Sales_Value': sales_value,
+                                'PO_Value': po_value,
+                                'Inbound_Value': inbound_value,
+                                'Anomaly': anomaly
+                            })
+                
+                return pd.DataFrame(sku_details)
+            
+            # Get SKU details
+            df_sku_detail = get_sku_detail_by_brand(
+                df_sales, df_po, df_po_delivered, df_product, 
+                selected_brands, start_date, end_date
+            )
+            
+            if not df_sku_detail.empty:
+                # Group by Brand for expandable sections
+                for brand in selected_brands:
+                    brand_sku_df = df_sku_detail[df_sku_detail['Brand'] == brand]
+                    
+                    if not brand_sku_df.empty:
+                        # Hitung statistik brand
+                        total_sku = len(brand_sku_df)
+                        anomaly_count = len(brand_sku_df[brand_sku_df['Anomaly'] != ''])
+                        oversell_count = len(brand_sku_df[brand_sku_df['Sell_Through_%'] > 100])
+                        slow_count = len(brand_sku_df[(brand_sku_df['Sell_Through_%'] < 40) & (brand_sku_df['PO_Qty'] > 0)])
+                        no_sales_count = len(brand_sku_df[(brand_sku_df['PO_Qty'] > 0) & (brand_sku_df['Sales_Qty'] == 0)])
+                        
+                        # Status warna untuk header
+                        if oversell_count > 0:
+                            header_color = "#FEF3C7"
+                            header_icon = "🔥"
+                        elif slow_count > 0:
+                            header_color = "#FEE2E2"
+                            header_icon = "📦"
+                        elif anomaly_count > 0:
+                            header_color = "#FFFBEB"
+                            header_icon = "⚠️"
+                        else:
+                            header_color = "#F0FDF4"
+                            header_icon = "✅"
+                        
+                        # Buat expander per brand
+                        with st.expander(
+                            f"{header_icon} **{brand}** | Total SKU: {total_sku} | "
+                            f"Anomali: {anomaly_count} (Oversell: {oversell_count}, Slow: {slow_count}, No Sales: {no_sales_count})",
+                            expanded=False
+                        ):
+                            # Summary metrics untuk brand ini
+                            col_b1, col_b2, col_b3, col_b4, col_b5 = st.columns(5)
+                            with col_b1:
+                                st.metric("Total Sales Qty", f"{brand_sku_df['Sales_Qty'].sum():,}")
+                            with col_b2:
+                                st.metric("Total PO Qty", f"{brand_sku_df['PO_Qty'].sum():,}")
+                            with col_b3:
+                                st.metric("Total Inbound", f"{brand_sku_df['Inbound_Qty'].sum():,}")
+                            with col_b4:
+                                avg_st = (brand_sku_df['Sales_Qty'].sum() / brand_sku_df['PO_Qty'].sum() * 100) if brand_sku_df['PO_Qty'].sum() > 0 else 0
+                                st.metric("Avg Sell Through", f"{avg_st:.1f}%")
+                            with col_b5:
+                                st.metric("SKU Active", f"{total_sku}")
+                            
+                            # Filter untuk tabel
+                            col_f1, col_f2 = st.columns([2, 1])
+                            with col_f1:
+                                show_anomaly_only = st.checkbox(
+                                    f"Tampilkan hanya SKU dengan anomali", 
+                                    key=f"anomaly_filter_{brand}"
+                                )
+                            with col_f2:
+                                sort_by = st.selectbox(
+                                    "Urutkan berdasarkan",
+                                    ["Sell Through % (Tertinggi)", "Sell Through % (Terendah)", "Sales Qty", "PO Qty"],
+                                    key=f"sort_{brand}"
+                                )
+                            
+                            # Filter dan sort data
+                            display_sku_df = brand_sku_df.copy()
+                            if show_anomaly_only:
+                                display_sku_df = display_sku_df[display_sku_df['Anomaly'] != '']
+                            
+                            if sort_by == "Sell Through % (Tertinggi)":
+                                display_sku_df = display_sku_df.sort_values('Sell_Through_%', ascending=False)
+                            elif sort_by == "Sell Through % (Terendah)":
+                                display_sku_df = display_sku_df.sort_values('Sell_Through_%', ascending=True)
+                            elif sort_by == "Sales Qty":
+                                display_sku_df = display_sku_df.sort_values('Sales_Qty', ascending=False)
+                            elif sort_by == "PO Qty":
+                                display_sku_df = display_sku_df.sort_values('PO_Qty', ascending=False)
+                            
+                            # Siapkan dataframe untuk display
+                            display_cols = ['SKU_ID', 'Product_Name', 'SKU_Tier', 'Sales_Qty', 'PO_Qty', 
+                                          'Inbound_Qty', 'Sell_Through_%', 'Inbound_Rate_%', 'Anomaly']
+                            
+                            display_df = display_sku_df[display_cols].copy()
+                            display_df['Sales_Qty'] = display_df['Sales_Qty'].apply(lambda x: f"{x:,}")
+                            display_df['PO_Qty'] = display_df['PO_Qty'].apply(lambda x: f"{x:,}")
+                            display_df['Inbound_Qty'] = display_df['Inbound_Qty'].apply(lambda x: f"{x:,}")
+                            display_df['Sell_Through_%'] = display_df['Sell_Through_%'].apply(lambda x: f"{x:.1f}%")
+                            display_df['Inbound_Rate_%'] = display_df['Inbound_Rate_%'].apply(lambda x: f"{x:.1f}%")
+                            
+                            # Color coding function untuk dataframe
+                            def color_sell_through(val):
+                                if '%' in str(val):
+                                    num = float(str(val).replace('%', ''))
+                                    if num > 100:
+                                        return 'background-color: #FEF3C7; color: #92400E; font-weight: bold'
+                                    elif num < 40:
+                                        return 'background-color: #FEE2E2; color: #991B1B'
+                                    elif num == 0:
+                                        return 'background-color: #F3F4F6; color: #6B7280'
+                                return ''
+                            
+                            def color_anomaly(val):
+                                if val == '🔥 OVERSELL':
+                                    return 'background-color: #FEF3C7; color: #92400E; font-weight: bold'
+                                elif val == '📦 SLOW':
+                                    return 'background-color: #FEE2E2; color: #991B1B'
+                                elif val == '❌ NO SALES':
+                                    return 'background-color: #F3F4F6; color: #6B7280'
+                                elif val == '⚠️ LOW INBOUND':
+                                    return 'background-color: #FFFBEB; color: #92400E'
+                                return ''
+                            
+                            # Apply styling
+                            styled_df = display_df.style.applymap(color_sell_through, subset=['Sell_Through_%'])
+                            styled_df = styled_df.applymap(color_anomaly, subset=['Anomaly'])
+                            
+                            st.dataframe(
+                                styled_df,
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    'SKU_ID': 'SKU ID',
+                                    'Product_Name': 'Product Name',
+                                    'SKU_Tier': 'Tier',
+                                    'Sales_Qty': 'Sales',
+                                    'PO_Qty': 'PO',
+                                    'Inbound_Qty': 'Inbound',
+                                    'Sell_Through_%': 'Sell Through',
+                                    'Inbound_Rate_%': 'Inbound Rate',
+                                    'Anomaly': 'Status'
+                                }
+                            )
+                            
+                            # Insight untuk brand ini
+                            if oversell_count > 0:
+                                oversell_skus = brand_sku_df[brand_sku_df['Sell_Through_%'] > 100]
+                                st.warning(f"""
+                                🔥 **OVERSELL DETECTED:** {oversell_count} SKU memiliki Sales > PO.
+                                - Total oversell: {(oversell_skus['Sales_Qty'].sum() - oversell_skus['PO_Qty'].sum()):,.0f} unit
+                                - **Rekomendasi:** Review forecast dan tambah PO untuk SKU-SKU ini.
+                                """)
+                            
+                            if slow_count > 0:
+                                slow_skus = brand_sku_df[(brand_sku_df['Sell_Through_%'] < 40) & (brand_sku_df['PO_Qty'] > 0)]
+                                st.info(f"""
+                                📦 **SLOW MOVING:** {slow_count} SKU memiliki Sell Through < 40%.
+                                - Total PO belum terjual: {(slow_skus['PO_Qty'].sum() - slow_skus['Sales_Qty'].sum()):,.0f} unit
+                                - **Rekomendasi:** Pertimbangkan promosi atau kurangi PO berikutnya.
+                                """)
+                            
+                            if no_sales_count > 0:
+                                no_sales_skus = brand_sku_df[(brand_sku_df['PO_Qty'] > 0) & (brand_sku_df['Sales_Qty'] == 0)]
+                                st.error(f"""
+                                ❌ **NO SALES:** {no_sales_count} SKU memiliki PO tapi tidak ada penjualan.
+                                - Total PO tidak terjual: {no_sales_skus['PO_Qty'].sum():,.0f} unit
+                                - **Rekomendasi:** Investigasi mengapa tidak ada penjualan. Risiko dead stock!
+                                """)
+                
+                # Tombol download semua data SKU
+                st.markdown("---")
+                csv_all = df_sku_detail.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Semua Detail SKU (CSV)",
+                    data=csv_all,
+                    file_name=f"sku_detail_all_brands_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.info("Tidak ada detail SKU untuk ditampilkan.")
+                
+            # =========================================================================
             # TIER & STATUS ANALYSIS (Tetap di bawah)
             # =========================================================================
             st.markdown("---")
