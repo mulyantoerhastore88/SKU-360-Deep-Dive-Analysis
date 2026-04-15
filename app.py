@@ -494,7 +494,7 @@ def prepare_chart_data(sku_id, metrics):
 # ECHARTS VISUALIZATION FUNCTIONS
 # =============================================================================
 
-ddef create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sku=""):
+def create_trend_chart_echarts(main_df, compare_df=None, main_sku="", compare_sku=""):
     """Create ECharts trend chart with Sales & Inbound as Bar, PO as Line"""
     
     if main_df.empty:
