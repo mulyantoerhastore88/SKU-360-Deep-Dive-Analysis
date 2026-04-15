@@ -1312,6 +1312,82 @@ with st.spinner('🔄 Loading data...'):
 # --- Prepare sales analysis data ---
 df_sales_analysis = prepare_sales_analysis_data(df_sales, df_product)
 
+# =============================================================================
+# SIDEBAR - TOMBOL REFRESH & INFO DATA
+# =============================================================================
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/000000/dashboard-layout.png", width=60)
+    st.markdown("## 📊 SKU 360° Evaluator")
+    st.markdown("---")
+    
+    # ===== TOMBOL REFRESH DATA (SATU-SATUNYA) =====
+    if st.button("🔄 REFRESH DATA DARI GSHEET", use_container_width=True, type="primary"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.toast("✅ Data sedang diperbarui dari Google Sheets...", icon="🔄")
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # ===== INFO DATA TERKINI =====
+    st.markdown("### 📊 Data Overview")
+    
+    if not df_product.empty:
+        st.metric("📦 Total SKU", f"{df_product['SKU_ID'].nunique():,}")
+    
+    if not df_sales.empty:
+        st.metric("💰 Sales Records", f"{len(df_sales):,}")
+        latest_sales = df_sales['Month'].max()
+        if pd.notna(latest_sales):
+            st.caption(f"📅 Data Sales terakhir: {latest_sales.strftime('%b %Y')}")
+    
+    if not df_po.empty:
+        st.metric("📋 PO Records", f"{len(df_po):,}")
+    
+    if not df_stock.empty:
+        st.metric("📦 Stock Records", f"{len(df_stock):,}")
+    
+    st.markdown("---")
+    
+    # ===== STATUS KONEKSI =====
+    st.markdown("### 🔗 Koneksi")
+    if client is not None:
+        st.success("✅ Connected to Google Sheets")
+    else:
+        st.error("❌ Gagal koneksi")
+    
+    st.markdown("---")
+    
+    # ===== INFORMASI TAMBAHAN =====
+    with st.expander("ℹ️ Tentang Dashboard"):
+        st.markdown("""
+        **SKU 360° Evaluator Pro**
+        
+        Dashboard untuk analisis performa SKU secara menyeluruh:
+        - 📊 Perbandingan Sales vs PO vs Inbound
+        - 📈 Multi-Brand Analysis
+        - 📦 Stock Management dengan Expiry Tracking
+        - 🔍 Drill-Down Detail SKU
+        
+        **Cara Refresh Data:**
+        Klik tombol **REFRESH DATA DARI GSHEET** di atas untuk memperbarui data dari Google Sheets.
+        """)
+    
+    with st.expander("🔍 Debug Info"):
+        if st.button("Clear Cache (Debug)", use_container_width=True):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
+        
+        st.write(f"Product SKU: {df_product['SKU_ID'].nunique() if not df_product.empty else 0}")
+        st.write(f"Sales SKU: {df_sales['SKU_ID'].nunique() if not df_sales.empty else 0}")
+        st.write(f"PO SKU: {df_po['SKU_ID'].nunique() if not df_po.empty else 0}")
+        st.write(f"Inbound SKU: {df_po_delivered['SKU_ID'].nunique() if not df_po_delivered.empty else 0}")
+        st.write(f"Stock SKU: {df_stock['SKU_ID'].nunique() if not df_stock.empty else 0}")
+    
+    st.markdown("---")
+    st.caption(f"🕐 Last refresh: {datetime.now().strftime('%d %b %Y, %H:%M:%S')}")
+
 # --- Create Tabs ---
 tab_sku, tab_sales_analytics, tab_stock = st.tabs([
     "🔍 SKU Evaluator",
