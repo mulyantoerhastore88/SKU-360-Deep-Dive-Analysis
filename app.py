@@ -1600,7 +1600,7 @@ with tab_sales_analytics:
             with col_t2:
                 status_perf = get_status_performance(df_filtered)
                 if not status_perf.empty:
-                    status_chart = create_status_pie_echarts(status_perf)
+                    status_chart = create_status_pie_chart_echarts(status_perf)
                     if status_chart:
                         st_echarts(options=status_chart, height="350px")
             
